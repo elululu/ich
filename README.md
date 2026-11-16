@@ -2,6 +2,10 @@
 
 PWA sans build (HTML + CSS + JS modules). Programme avancé PPL ×2 sur 6 jours + 1 jour off, cycle de 5 semaines (S5 = deload), séries/charges/reps, chrono de repos plein écran avec cri « ICH !!! », suggestions de progression, records (1RM estimé), historique. Tout est stocké en local sur le téléphone (`localStorage`).
 
+**En ligne : https://elululu.github.io/ich/** (GitHub Pages, branche `main`, dépôt [elululu/ich](https://github.com/elululu/ich)).
+
+Pour mettre à jour le site : modifier, incrémenter `VERSION` dans `sw.js`, puis `git commit` et `git push` — GitHub Pages republie tout seul en une minute environ.
+
 ## Lancer en local
 
 ```bash
