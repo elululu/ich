@@ -9,6 +9,11 @@ export const EXERCISES = {
     cues: ['Omoplates serrées et basses, petit arc lombaire', 'Barre au bas des pecs, coudes à ~45°', 'Pieds ancrés, pousse avec les jambes'],
     quip: 'La barre descend, ton ego monte.'
   },
+  db_bench: {
+    name: 'Développé couché haltères', muscles: 'Pectoraux · triceps · épaules', gif: 'db_bench', lower: false,
+    cues: ['Monte les haltères en les posant sur les genoux, puis bascule en arrière', 'Omoplates serrées, coudes à ~45°, descente lente jusqu\'à l\'étirement des pecs', 'Pousse en rapprochant légèrement les haltères, sans les cogner en haut'],
+    quip: 'Deux haltères, deux fois plus d\'ICH.'
+  },
   ohp: {
     name: 'Développé militaire debout', muscles: 'Épaules · triceps · gainage', gif: 'ohp', lower: false,
     cues: ['Fessiers et abdos contractés, pas de cambrure', 'Tête qui passe sous la barre en fin de mouvement', 'Avant-bras verticaux'],
@@ -168,7 +173,7 @@ export const SESSIONS = {
   pushA: {
     id: 'pushA', type: 'push', title: 'PUSH A', subtitle: 'Force — pecs, épaules, triceps',
     exercises: [
-      { ex: 'bench',         sets: 4, reps: '4-6',   rest: 180, rpe: 8,   tempo: '2-1-X' },
+      { ex: 'db_bench',      sets: 4, reps: '6-8',   rest: 150, rpe: 8,   tempo: '3-1-1' },
       { ex: 'ohp',           sets: 3, reps: '6-8',   rest: 150, rpe: 8,   tempo: '2-0-X' },
       { ex: 'incline_db',    sets: 3, reps: '8-10',  rest: 120, rpe: 8.5, tempo: '3-1-1' },
       { ex: 'dips',          sets: 3, reps: '8-10',  rest: 120, rpe: 8.5, tempo: '2-1-1' },

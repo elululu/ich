@@ -19,7 +19,9 @@ const yell = () => { if (S.settings.sound) sound.shout(); };
 
 const SMALL_INC = new Set(['lateral_raise', 'rear_delt_fly', 'cable_fly', 'face_pull', 'incline_curl', 'hammer_curl', 'pushdown']);
 const BODYWEIGHT = new Set(['pullup', 'dips', 'hanging_leg_raise']);
-const incFor = id => (SMALL_INC.has(id) ? 1 : EXERCISES[id].lower ? 5 : 2.5);
+// Charge saisie par haltère ; les haltères de salle montent en général de 2 en 2 kg
+const DUMBBELL = new Set(['db_bench', 'incline_db', 'seated_db_press', 'db_row', 'shrug', 'bulgarian', 'lateral_raise', 'hammer_curl', 'rear_delt_fly', 'incline_curl']);
+const incFor = id => (SMALL_INC.has(id) ? 1 : DUMBBELL.has(id) ? 2 : EXERCISES[id].lower ? 5 : 2.5);
 const rir = rpe => Math.max(0, Math.round(10 - rpe));
 const e1rm = s => (s.reps > 0 && s.kg > 0 ? s.kg * (1 + Math.min(s.reps, 12) / 30) : 0);
 
@@ -78,14 +80,20 @@ function suggest(p) {
   if (p.deload) return { kg: top ? roundTo(top * 0.9, inc) : top, text: 'Semaine <b>DELOAD</b> : −10 % de charge, moins de séries, technique parfaite.' };
   if (work.every(s => +s.reps >= hi)) {
     if (BODYWEIGHT.has(p.ex) && top === 0 && p.ex === 'hanging_leg_raise') return { kg: 0, up: true, text: 'Toutes les reps au max → ralentis la descente (4 s). ICH !' };
-    return { kg: top + inc, up: true, text: `Toutes tes reps au max la dernière fois → <b>+${fmtKg(inc)} kg</b>. ICH !` };
+    return { kg: top + inc, up: true, text: `Toutes tes reps au max la dernière fois → <b>+${fmtKg(inc)} kg${DUMBBELL.has(p.ex) ? ' par haltère' : ''}</b>. ICH !` };
   }
   if (work.some(s => +s.reps < lo)) return { kg: top, text: `Même charge, vise au moins <b>${lo} reps</b> sur chaque série.` };
   return { kg: top, text: `Même charge, gratte <b>+1 rep</b> par série jusqu'à ${hi}.` };
 }
 
 function warmup(p, kg) {
-  if (p.i !== 0 || p.rest < 150 || !(kg >= 40)) return '';
+  if (p.i !== 0 || p.rest < 150) return '';
+  if (DUMBBELL.has(p.ex)) {
+    if (!(kg >= 14)) return '';
+    const steps = [[0.4, 10], [0.6, 6], [0.8, 3]].map(([pct, r]) => `${fmtKg(Math.max(2, roundTo(kg * pct, 2)))}×${r}`);
+    return `<div class="hint warm">🔥 Échauffement (kg/haltère) : <b>${steps.join(' · ')}</b></div>`;
+  }
+  if (!(kg >= 40)) return '';
   const steps = [[0.4, 5], [0.6, 3], [0.8, 2]].map(([pct, r]) => `${fmtKg(Math.max(20, roundTo(kg * pct, 2.5)))}×${r}`);
   return `<div class="hint warm">🔥 Échauffement : <b>barre×10 · ${steps.join(' · ')}</b></div>`;
 }
@@ -275,7 +283,7 @@ function viewWorkout() {
         <div class="hint ${sg.up ? 'go' : ''}">🎯 ${sg.text}</div>
         ${warmup(p, firstKg)}
         <div class="sets">
-          <div class="set-head"><span>#</span><span>${bw ? 'Lest kg' : 'kg'}</span><span></span><span>Reps</span><span></span></div>
+          <div class="set-head"><span>#</span><span>${bw ? 'Lest kg' : DUMBBELL.has(p.ex) ? 'kg/haltère' : 'kg'}</span><span></span><span>Reps</span><span></span></div>
           ${entry.sets.map((st, i) => `<div class="set-row ${st.done ? 'done' : ''}" data-i="${i}">
             <span class="set-n">${i + 1}</span>
             <input class="kg" data-f="kg" inputmode="decimal" enterkeyhint="next" value="${esc(st.kg)}" placeholder="${bw ? '0' : 'kg'}" aria-label="Charge série ${i + 1}">
