@@ -189,7 +189,8 @@ export const SESSIONS = {
       { ex: 'bb_row',      sets: 3, reps: '6-8',   rest: 120, rpe: 8,   tempo: '2-1-1' },
       { ex: 'face_pull',   sets: 3, reps: '15-20', rest: 60,  rpe: 8.5, tempo: '2-1-1' },
       { ex: 'ez_curl',     sets: 3, reps: '8-10',  rest: 75,  rpe: 9,   tempo: '3-0-1' },
-      { ex: 'hammer_curl', sets: 3, reps: '10-12', rest: 60,  rpe: 9,   tempo: '2-0-1' }
+      { ex: 'hammer_curl', sets: 3, reps: '10-12', rest: 60,  rpe: 9,   tempo: '2-0-1' },
+      { ex: 'lateral_raise', sets: 3, reps: '12-15', rest: 60, rpe: 9,  tempo: '2-0-2' }
     ]
   },
   legsA: {
@@ -222,7 +223,8 @@ export const SESSIONS = {
       { ex: 'rear_delt_fly', sets: 4, reps: '15-20', rest: 45,  rpe: 9.5, tempo: '2-0-2' },
       { ex: 'face_pull',     sets: 3, reps: '15',    rest: 60,  rpe: 9,   tempo: '2-1-1' },
       { ex: 'incline_curl',  sets: 3, reps: '10-12', rest: 75,  rpe: 9,   tempo: '3-0-1' },
-      { ex: 'shrug',         sets: 3, reps: '12-15', rest: 60,  rpe: 9,   tempo: '1-1-1' }
+      { ex: 'shrug',         sets: 3, reps: '12-15', rest: 60,  rpe: 9,   tempo: '1-1-1' },
+      { ex: 'lateral_raise', sets: 3, reps: '12-15', rest: 60,  rpe: 9,   tempo: '2-0-2' }
     ]
   },
   legsB: {
