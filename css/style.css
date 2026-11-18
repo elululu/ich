@@ -43,6 +43,7 @@ img { display: block; max-width: 100%; }
 .t-pull { --accent: var(--blue); }
 .t-legs { --accent: var(--green); }
 .t-rest { --accent: var(--ink); }
+.t-food { --accent: #E86A00; }
 
 /* ───────── Layout ───────── */
 #app {
@@ -50,6 +51,8 @@ img { display: block; max-width: 100%; }
   margin: 0 auto;
   padding: calc(var(--safe-t) + 14px) 16px calc(var(--tab-h) + var(--safe-b) + 28px);
 }
+/* La barre « SÉANCE EN COURS » ne doit pas cacher le bas de la page */
+body:has(.resume:not(.hidden)) #app { padding-bottom: calc(var(--tab-h) + var(--safe-b) + 96px); }
 .view { animation: pop-in .28s cubic-bezier(.2, 1.4, .4, 1) both; }
 @keyframes pop-in { from { opacity: 0; transform: translateY(10px) scale(.98); } }
 
@@ -367,15 +370,79 @@ h2.section::after { content: ''; flex: 1; height: 3px; background: var(--ink); b
 .switch input:checked + span { background: var(--green); }
 .switch input:checked + span::before { transform: translateX(24px); background: #fff; border: 2px solid var(--ink); top: 2px; }
 
+/* ───────── Alimentation ───────── */
+.t-food .today-title { padding-top: .38em; } /* place pour l'accent de « À TABLE » et « SÈCHE » */
+.food-mini { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 14px; padding: 12px 14px; text-decoration: none; color: inherit; font-weight: 700; font-size: 14px; }
+.food-mini b { font-weight: 900; }
+.food-mini .chev { margin-left: auto; font-family: 'Bangers', sans-serif; font-size: 26px; line-height: 1; }
+.kcal-big { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.kcal-big b {
+  font-family: 'Bangers', sans-serif; font-weight: 400; font-size: 64px; line-height: .9; letter-spacing: 1px;
+  color: var(--accent); -webkit-text-stroke: 1.5px var(--ink); text-shadow: 3px 3px 0 var(--ink);
+}
+.kcal-big span { font-weight: 800; }
+.macros { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0 10px; }
+.macros div { background: var(--paper-2); border: 2px solid var(--ink); border-radius: 12px; text-align: center; padding: 8px 4px 6px; }
+.macros b { display: block; font-family: 'Bangers', sans-serif; font-weight: 400; font-size: 26px; line-height: 1; letter-spacing: .5px; }
+.macros span { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .6px; }
+.food-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.food-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; font-weight: 800; }
+.food-form .full { grid-column: 1 / -1; }
+.food-form input, .food-form select, .weigh-row input {
+  width: 100%; min-width: 0; border: 2.5px solid var(--ink); border-radius: 12px; background: #fff;
+  padding: 10px; font-weight: 800; font-size: 17px;
+}
+.food-form input:focus, .weigh-row input:focus, .prof-in:focus { outline: none; background: var(--yellow-hi); }
+.prof-in { width: 84px; border: 2px solid var(--ink); border-radius: 10px; background: #fff; padding: 6px 8px; font-weight: 800; text-align: center; }
+.prot-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.prot-head b {
+  font-family: 'Bangers', sans-serif; font-weight: 400; font-size: 48px; line-height: .9;
+  color: var(--accent); -webkit-text-stroke: 1.2px var(--ink); text-shadow: 2px 2px 0 var(--ink);
+}
+.prot-head > span:nth-child(2) { font-weight: 800; font-size: 18px; }
+.prot-head > :last-child { margin-left: auto; }
+.prot-btns { display: grid; grid-template-columns: .8fr 1fr 1fr 1fr; gap: 8px; }
+.prot-btns .btn { padding: 11px 2px; font-size: 16px; }
+.prot-btns .btn:disabled { opacity: .45; }
+.set-item.crea { margin-top: 6px; border-bottom: 0; padding-bottom: 0; }
+.weigh-row { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; }
+.weigh-row input { font-size: 22px; text-align: center; font-variant-numeric: tabular-nums; }
+.weigh-row span { font-weight: 900; }
+.stats.sm { margin-top: 12px; gap: 8px; }
+.stats.sm .stat { box-shadow: var(--shadow-sm); border-width: 2px; padding: 10px 4px; }
+.stats.sm .stat b { font-size: 26px; }
+.stats.sm .stat span { font-size: 10.5px; }
+.chart-read { font-size: 12.5px; font-weight: 700; margin: 16px 0 6px; min-height: 18px; }
+.wchart { display: block; width: 100%; height: auto; overflow: visible; touch-action: pan-y; user-select: none; }
+.wchart .grid { stroke: rgba(20, 18, 16, .12); stroke-width: 1; }
+.wchart .ax { font-size: 10px; font-weight: 700; fill: var(--muted); font-variant-numeric: tabular-nums; }
+.wchart .avg { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.wchart .dot { fill: var(--muted); stroke: var(--paper); stroke-width: 2; }
+.wchart .end { fill: var(--accent); stroke: var(--paper); stroke-width: 2; }
+.wchart .lbl { font-size: 11px; font-weight: 900; fill: var(--ink); }
+.wchart .xh { stroke: var(--ink); stroke-width: 1; }
+.wchart .focus { fill: var(--ink); stroke: var(--paper); stroke-width: 2; }
+.chart-key { display: flex; gap: 14px; margin-top: 4px; font-size: 12px; font-weight: 700; color: var(--muted); }
+.chart-key span { display: inline-flex; align-items: center; gap: 6px; }
+.k-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.k-line { width: 16px; height: 2px; border-radius: 2px; background: var(--accent); }
+.food-ref { margin-top: 12px; border-top: 2px dashed rgba(20, 18, 16, .15); padding-top: 10px; }
+.food-ref summary { font-weight: 800; cursor: pointer; }
+.food-ref ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; font-weight: 600; }
+.food-ref .log-body { border-top: 0; padding: 8px 0 0; }
+.food-ref .log-body div { align-items: center; }
+.mini-x { width: 26px; height: 26px; margin-left: 8px; border: 2px solid var(--ink); border-radius: 8px; background: var(--paper); font-weight: 900; line-height: 1; }
+
 /* ───────── Barre d'onglets ───────── */
 .tabs {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--ink);
-  padding: 6px 8px calc(var(--safe-b) + 6px); display: grid; grid-template-columns: repeat(4, 1fr);
+  padding: 6px 6px calc(var(--safe-b) + 6px); display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px;
   border-top: 3px solid var(--ink);
 }
 .tabs a {
   display: flex; flex-direction: column; align-items: center; gap: 2px; text-decoration: none; color: #BDB49F;
-  font-family: 'Bangers', sans-serif; font-size: 15px; letter-spacing: 1px; padding: 6px 0 4px; border-radius: 12px;
+  font-family: 'Bangers', sans-serif; font-size: clamp(11px, 3.1vw, 15px); letter-spacing: .5px; white-space: nowrap;
+  padding: 6px 0 4px; border-radius: 12px; min-width: 0;
 }
 .tabs a svg { width: 26px; height: 26px; }
 .tabs a.on { color: var(--ink); background: var(--yellow); }

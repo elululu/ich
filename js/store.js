@@ -24,7 +24,30 @@ function defaults() {
     week: [...DEFAULT_WEEK],
     cycleStart: isoDay(mondayOf()),
     settings: { sound: true, vibrate: true, wakelock: true },
+    food: defaultFood(),
     active: null
+  };
+}
+
+function defaultFood() {
+  return {
+    profile: { height: null, age: null, sex: 'h', goal: 'bulk' },
+    kcalAdj: 0,        // ajustement cumulé proposé par les bilans de 2 semaines
+    adjustedAt: null,  // date du dernier ajustement (ou changement d'objectif)
+    weights: {},       // { 'AAAA-MM-JJ': kg }
+    protein: {},       // { 'AAAA-MM-JJ': grammes }
+    creatine: {}       // { 'AAAA-MM-JJ': true }
+  };
+}
+
+// Fusionne des données sauvegardées (éventuellement anciennes) avec les valeurs par défaut
+function merge(data) {
+  const d = defaults();
+  const f = data.food || {};
+  return {
+    ...d, ...data,
+    settings: { ...d.settings, ...(data.settings || {}) },
+    food: { ...d.food, ...f, profile: { ...d.food.profile, ...(f.profile || {}) } }
   };
 }
 
@@ -34,9 +57,7 @@ function load() {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return defaults();
-    const data = JSON.parse(raw);
-    const d = defaults();
-    return { ...d, ...data, settings: { ...d.settings, ...(data.settings || {}) } };
+    return merge(JSON.parse(raw));
   } catch {
     return defaults();
   }
@@ -47,9 +68,8 @@ export function save() {
 }
 
 export function replaceAll(data) {
-  const d = defaults();
   Object.keys(S).forEach(k => delete S[k]);
-  Object.assign(S, d, data, { settings: { ...d.settings, ...(data.settings || {}) } });
+  Object.assign(S, merge(data));
   save();
 }
 

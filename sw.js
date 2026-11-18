@@ -1,5 +1,5 @@
 // ICH !!! service worker — tout marche hors ligne, même au sous-sol de la salle.
-const VERSION = 'ich-v2';
+const VERSION = 'ich-v3';
 const MEDIA = 'ich-media-v1';
 const CORE = [
   './',
@@ -8,6 +8,7 @@ const CORE = [
   'js/app.js',
   'js/data.js',
   'js/store.js',
+  'js/food.js',
   'js/sound.js',
   'fonts/bangers.woff2',
   'fonts/archivo.woff2',

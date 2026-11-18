@@ -1,6 +1,7 @@
 import { EXERCISES, SESSIONS, DAY_NAMES, DAY_SHORT, CYCLE_WEEKS, SHOUTS, REST_LINES } from './data.js';
 import { S, save, mondayOf, isoDay, replaceAll, resetAll } from './store.js';
 import * as sound from './sound.js';
+import { GOALS, goalOf, targets, aimKg, sortedWeights, avgWeight, currentWeight, trend, review, series, streak, shiftDay } from './food.js';
 
 // ───────────────────────── Utilitaires ─────────────────────────
 const $ = (s, el = document) => el.querySelector(s);
@@ -100,6 +101,30 @@ function warmup(p, kg) {
 
 const estMinutes = p => Math.round(p.reduce((t, x) => t + x.sets * (45 + x.rest), 0) / 60);
 
+// ───────────────────────── Alimentation : helpers ─────────────────────────
+const todayIso = () => isoDay(new Date());
+const trainingDays = () => S.week.filter(x => SESSIONS[x]).length;
+const foodReady = () => S.food.profile.height > 0 && S.food.profile.age > 0 && Object.keys(S.food.weights).length > 0;
+const fmtNum = (n, d = 1) => (Math.round(n * 10 ** d) / 10 ** d).toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d });
+const signed = (n, d = 1) => (n > 0 ? '+' : n < 0 ? '−' : '±') + fmtNum(Math.abs(n), d);
+const fmtInt = n => Math.round(n).toLocaleString('fr-FR');
+const fmtDay = d => new Date(d + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+
+function foodNow() {
+  const today = todayIso();
+  const f = S.food;
+  const kg = currentWeight(f.weights, today);
+  return { today, f, kg, t: targets(f.profile, kg, trainingDays(), f.kcalAdj) };
+}
+
+function aimText(p, kg) {
+  const [lo, hi] = aimKg(p, kg).map(Math.abs);
+  if (p.goal === 'maintain') return `poids stable, à ${fmtNum(hi)} kg près par semaine`;
+  return p.goal === 'cut' ? `−${fmtNum(hi)} à −${fmtNum(lo)} kg par semaine` : `+${fmtNum(lo)} à +${fmtNum(hi)} kg par semaine`;
+}
+const goalOptions = sel => Object.entries(GOALS).map(([k, g]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${g.label}</option>`).join('');
+const sexOptions = sel => [['h', 'Homme'], ['f', 'Femme']].map(([k, l]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${l}</option>`).join('');
+
 function doneDaysThisWeek() {
   const mon = mondayOf().getTime();
   const days = new Set();
@@ -164,8 +189,22 @@ function viewToday() {
       <div class="bubble" id="heroBubble">ICH !!!<small>${hello}</small></div>
     </section>
     ${card}
+    ${foodMini()}
     <h2 class="section">CETTE SEMAINE</h2>
     ${weekStrip()}`;
+}
+
+// Rappel protéines + pesée sur l'écran du jour
+function foodMini() {
+  if (!foodReady()) return `<a class="panel food-mini t-food" href="#/food"><span>🍗 Calcule tes calories et tes protéines</span><span class="chev">›</span></a>`;
+  const { today, f, t } = foodNow();
+  const prot = f.protein[today] || 0;
+  const w = f.weights[today];
+  return `<a class="panel food-mini t-food" href="#/food">
+    <span>🍗 <b>${prot}/${t.protein} g</b> protéines</span>
+    <span>⚖️ <b>${w !== undefined ? `${fmtNum(w)} kg` : 'Pèse-toi !'}</b></span>
+    <span class="chev">›</span>
+  </a>`;
 }
 
 function viewWeek() {
@@ -374,7 +413,7 @@ function viewSettings() {
     <div class="panel set-list">
       <div class="set-item"><span>Exporter<small>Sauvegarde JSON de tout ton historique</small></span><button class="btn sm" data-act="export">Exporter</button></div>
       <div class="set-item"><span>Importer<small>Remplace les données actuelles</small></span><label class="btn sm">Importer<input type="file" accept="application/json,.json" data-import hidden></label></div>
-      <div class="set-item"><span>Tout effacer<small>Historique, réglages, séance en cours</small></span><button class="btn sm" data-act="reset" style="background:var(--red);color:#fff">Effacer</button></div>
+      <div class="set-item"><span>Tout effacer<small>Historique, pesées, réglages, séance en cours</small></span><button class="btn sm" data-act="reset" style="background:var(--red);color:#fff">Effacer</button></div>
     </div>
     <h2 class="section">INSTALLER L'APP</h2>
     <div class="panel">
@@ -385,6 +424,225 @@ function viewSettings() {
       </ul>
     </div>
     <p class="small muted" style="text-align:center;margin-top:18px">ICH!!! v1 · tout reste sur ton téléphone</p>`;
+}
+
+// ───────────────────────── Alimentation ─────────────────────────
+function viewFoodSetup() {
+  const p = S.food.profile;
+  return `${topbar()}
+    <section class="panel today t-food" style="margin-top:6px">
+      <div class="today-head"><div class="today-day">Alimentation</div><div class="today-title">À TABLE !</div><div class="today-sub">Le muscle se construit à la salle et se paie à table.</div></div>
+      <div class="today-body">
+        <p style="margin-top:0;font-weight:600">Donne 5 infos : ICH calcule tes calories et tes macros, puis les ajuste toutes les 2 semaines d'après ta courbe de poids.</p>
+        <div class="food-form">
+          <label>Taille (cm)<input id="fHeight" inputmode="numeric" placeholder="175" value="${p.height || ''}"></label>
+          <label>Poids ce matin (kg)<input id="fWeight" inputmode="decimal" placeholder="70,0"></label>
+          <label>Âge<input id="fAge" inputmode="numeric" placeholder="25" value="${p.age || ''}"></label>
+          <label>Sexe<select id="fSex">${sexOptions(p.sex)}</select></label>
+          <label class="full">Objectif<select id="fGoal">${goalOptions(p.goal)}</select></label>
+        </div>
+        <button class="btn big" data-act="food-setup">CALCULER ! ICH !!!</button>
+      </div>
+    </section>`;
+}
+
+function reviewCard(rv, p, kg) {
+  if (rv.wait) return `<div class="hint">🗓️ Prochain bilan automatique dans <b>${rv.wait} jour${rv.wait > 1 ? 's' : ''}</b>. Pèse-toi chaque matin : ICH ajustera tes calories d'après ta courbe.</div>`;
+  if (rv.missing) return `<div class="hint">⚖️ Pas assez de pesées sur les 14 derniers jours pour faire le bilan : il en faut au moins 5, étalées sur 10 jours.</div>`;
+  const rate = `<b>${signed(rv.rate, 2)} kg/sem</b> sur 14 jours`;
+  if (!rv.delta) {
+    const [lo, hi] = goalOf(p).aim;
+    if (rv.pct >= lo && rv.pct <= hi) return `<div class="hint go">✅ Rythme parfait : ${rate}. On ne touche à rien. ICH !</div>`;
+    return `<div class="hint go">👌 Rythme correct : ${rate} (objectif ${aimText(p, kg)}). Pas besoin de toucher aux calories pour l'instant.</div>`;
+  }
+  return `<div class="hint warm">${rv.delta > 0 ? '🍽️' : '✂️'} ${esc(rv.msg)} : ${rate} (objectif ${aimText(p, kg)}). ICH propose <b>${signed(rv.delta, 0)} kcal par jour</b>.
+    <div class="row" style="margin-top:8px;flex-wrap:wrap">
+      <button class="btn sm ink" data-act="food-apply" data-delta="${rv.delta}">Appliquer ${signed(rv.delta, 0)} kcal</button>
+      <button class="btn sm" data-act="food-skip">Pas cette fois</button>
+    </div></div>`;
+}
+
+// Courbe de poids sur 4 semaines : pesées (points) + moyenne glissante sur 7 jours (ligne)
+const CH = { W: 320, H: 150, L: 34, R: 40, T: 10, B: 22, days: 28 };
+let chart = null;
+
+function chartReadout(p) {
+  return `${fmtDay(p.d)} · pesée <b>${p.kg !== null ? `${fmtNum(p.kg)} kg` : '—'}</b> · moyenne 7 j <b>${p.avg !== null ? `${fmtNum(p.avg)} kg` : '—'}</b>`;
+}
+
+function weightChart(today) {
+  const pts = series(S.food.weights, today, CH.days);
+  if (pts.filter(p => p.kg !== null).length < 2) { chart = null; return '<p class="small muted" style="margin:14px 0 0">La courbe apparaît dès la 2ᵉ pesée.</p>'; }
+  const { W, H, L, R, T, B } = CH;
+  const vals = pts.flatMap(p => [p.kg, p.avg]).filter(v => v !== null);
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  const step = hi - lo <= 1.5 ? 0.5 : hi - lo <= 4 ? 1 : 2;
+  lo = Math.floor((lo - 0.2) / step) * step;
+  hi = Math.ceil((hi + 0.2) / step) * step;
+  const dx = (W - L - R) / (CH.days - 1);
+  const x = i => L + i * dx;
+  const y = v => T + ((hi - v) / (hi - lo)) * (H - T - B);
+  const ticks = [];
+  for (let v = lo; v <= hi + 1e-9; v += step) ticks.push(v);
+  let path = '', pen = false;
+  pts.forEach(p => {
+    if (p.avg === null) { pen = false; return; }
+    path += `${pen ? 'L' : 'M'}${x(p.i).toFixed(1)},${y(p.avg).toFixed(1)}`;
+    pen = true;
+  });
+  const withAvg = pts.filter(p => p.avg !== null);
+  const last = withAvg[withAvg.length - 1];
+  chart = { pts, x, y, dx, last };
+  return `<div class="chart-read" id="chartRead">${chartReadout(last)}</div>
+    <svg class="wchart" id="wChart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Courbe de poids des 4 dernières semaines. Moyenne actuelle ${fmtNum(last.avg)} kg.">
+      ${ticks.map(v => `<line class="grid" x1="${L}" x2="${W - R}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/><text class="ax" x="${L - 6}" y="${(y(v) + 3.5).toFixed(1)}" text-anchor="end">${fmtNum(v, step < 1 ? 1 : 0)}</text>`).join('')}
+      <text class="ax" x="${L}" y="${H - 6}">${fmtDay(pts[0].d)}</text>
+      <text class="ax" x="${W - R}" y="${H - 6}" text-anchor="end">aujourd'hui</text>
+      <line class="xh" id="chartXh" y1="${T}" y2="${H - B}" style="display:none"/>
+      <path class="avg" d="${path}"/>
+      ${pts.filter(p => p.kg !== null).map(p => `<circle class="dot" cx="${x(p.i).toFixed(1)}" cy="${y(p.kg).toFixed(1)}" r="4"/>`).join('')}
+      <circle class="end" cx="${x(last.i).toFixed(1)}" cy="${y(last.avg).toFixed(1)}" r="4.5"/>
+      <text class="lbl" x="${(x(last.i) + 8).toFixed(1)}" y="${(y(last.avg) + 4).toFixed(1)}">${fmtNum(last.avg)}</text>
+      <circle class="focus" id="chartFocus" r="5" style="display:none"/>
+    </svg>
+    <div class="chart-key"><span><i class="k-dot"></i>Pesée</span><span><i class="k-line"></i>Moyenne sur 7 jours</span></div>`;
+}
+
+function bindChart() {
+  const svg = $('#wChart');
+  if (!svg || !chart) return;
+  const read = $('#chartRead'), xh = $('#chartXh'), focus = $('#chartFocus');
+  const show = ev => {
+    const r = svg.getBoundingClientRect();
+    const vx = ((ev.clientX - r.left) / r.width) * CH.W;
+    const i0 = Math.max(0, Math.min(CH.days - 1, Math.round((vx - CH.L) / chart.dx)));
+    // jour avec des données le plus proche du doigt
+    let best = null;
+    chart.pts.forEach(p => { if ((p.kg !== null || p.avg !== null) && (!best || Math.abs(p.i - i0) < Math.abs(best.i - i0))) best = p; });
+    if (!best) return;
+    const cx = chart.x(best.i).toFixed(1);
+    xh.setAttribute('x1', cx); xh.setAttribute('x2', cx); xh.style.display = '';
+    const v = best.kg ?? best.avg;
+    focus.setAttribute('cx', cx); focus.setAttribute('cy', chart.y(v).toFixed(1)); focus.style.display = '';
+    read.innerHTML = chartReadout(best);
+  };
+  svg.addEventListener('pointerdown', show);
+  svg.addEventListener('pointermove', show);
+  svg.addEventListener('pointerleave', () => { xh.style.display = 'none'; focus.style.display = 'none'; read.innerHTML = chartReadout(chart.last); });
+}
+
+function viewFood() {
+  if (!foodReady()) return viewFoodSetup();
+  const { today, f, kg, t } = foodNow();
+  const p = f.profile;
+  const g = goalOf(p);
+  const prot = f.protein[today] || 0;
+  const crea = !!f.creatine[today];
+  const cs = streak(f.creatine, today);
+  const w = f.weights[today];
+  const avg7 = avgWeight(f.weights, today);
+  const rate = trend(f.weights, today);
+  const all = sortedWeights(f.weights);
+  const recent = all.filter(x => x.d > shiftDay(today, -14)).length;
+  return `<div class="t-food">${topbar()}
+    <section class="panel today" style="margin-top:6px">
+      <div class="today-head"><div class="today-day">Ton objectif</div><div class="today-title">${g.title}</div><div class="today-sub">Vise ${aimText(p, kg)}</div></div>
+      <div class="today-body">
+        <div class="kcal-big"><b>${fmtInt(t.kcal)}</b><span>kcal par jour</span></div>
+        <div class="macros">
+          <div><b>${t.protein} g</b><span>protéines</span></div>
+          <div><b>${t.fat} g</b><span>lipides</span></div>
+          <div><b>${t.carbs} g</b><span>glucides</span></div>
+        </div>
+        ${reviewCard(review(f, today), p, kg)}
+        <p class="small muted" style="margin:8px 0 0">Maintenance estimée ${fmtInt(t.maintenance)} kcal${f.kcalAdj ? ` (dont ${signed(f.kcalAdj, 0)} kcal d'ajustement)` : ''} · ${trainingDays()} séances par semaine · calculé sur ${fmtNum(kg)} kg.</p>
+      </div>
+    </section>
+
+    <h2 class="section">PROTÉINES DU JOUR</h2>
+    <div class="panel">
+      <div class="prot-head"><b>${prot}</b><span>/ ${t.protein} g</span>${prot >= t.protein ? '<span class="tag" style="background:#DFFFE9">✓ Objectif atteint</span>' : `<span class="small muted">encore ${t.protein - prot} g</span>`}</div>
+      <div class="progress"><i style="width:${Math.min(100, (prot / t.protein) * 100)}%"></i></div>
+      <div class="prot-btns">
+        <button class="btn" data-act="prot" data-g="-10" ${prot <= 0 ? 'disabled' : ''} aria-label="Retirer 10 grammes">−10</button>
+        <button class="btn accent" data-act="prot" data-g="10">+10 g</button>
+        <button class="btn accent" data-act="prot" data-g="25">+25 g</button>
+        <button class="btn accent" data-act="prot" data-g="35">+35 g</button>
+      </div>
+      <div class="set-item crea"><span>Créatine 5 g<small>${cs > 1 ? `🔥 ${cs} jours d'affilée` : 'Une dose par jour, même les jours off'}</small></span><label class="switch"><input type="checkbox" data-crea ${crea ? 'checked' : ''}><span></span></label></div>
+      <details class="food-ref"><summary>Repères protéines</summary><ul>
+        <li>100 g de blanc de poulet cuit ≈ 30 g</li>
+        <li>1 boîte de thon (≈ 110 g égoutté) ≈ 28 g</li>
+        <li>1 dose de whey (30 g) ≈ 24 g</li>
+        <li>250 g de skyr ≈ 25 g</li>
+        <li>1 steak haché 5 % (100 g) ≈ 20 g</li>
+        <li>3 œufs ≈ 18 g</li>
+      </ul></details>
+    </div>
+
+    <h2 class="section">PESÉE DU MATIN</h2>
+    <div class="panel">
+      <div class="weigh-row">
+        <input id="weighIn" inputmode="decimal" enterkeyhint="done" placeholder="${fmtNum(kg)}" value="${w !== undefined ? fmtNum(w) : ''}" aria-label="Poids de ce matin en kg">
+        <span>kg</span>
+        <button class="btn accent" data-act="weigh">${w !== undefined ? 'Corriger' : 'Enregistrer'}</button>
+      </div>
+      <p class="small muted" style="margin:8px 0 0">Au réveil, après les toilettes, avant de manger. Ne regarde que la moyenne : le poids d'un jour bouge avec l'eau.</p>
+      <div class="stats sm">
+        <div class="panel stat"><b>${avg7 !== null ? fmtNum(avg7) : '—'}</b><span>moy. 7 j (kg)</span></div>
+        <div class="panel stat"><b>${rate !== null ? signed(rate, 2) : '—'}</b><span>kg / semaine</span></div>
+        <div class="panel stat"><b>${recent}/14</b><span>pesées</span></div>
+      </div>
+      ${weightChart(today)}
+      <details class="food-ref"><summary>Toutes les pesées (${all.length})</summary>
+        <div class="log-body">${[...all].reverse().slice(0, 60).map(x => `<div><span>${fmtDay(x.d)}</span><span>${fmtNum(x.kg)} kg<button class="mini-x" data-act="del-weight" data-d="${x.d}" aria-label="Supprimer la pesée du ${fmtDay(x.d)}">×</button></span></div>`).join('')}</div>
+      </details>
+    </div>
+
+    <h2 class="section">TON PROFIL</h2>
+    <div class="panel set-list">
+      <div class="set-item"><span>Objectif</span><select data-prof="goal">${goalOptions(p.goal)}</select></div>
+      <div class="set-item"><span>Taille<small>en cm</small></span><input class="prof-in" data-prof="height" inputmode="numeric" value="${p.height}"></div>
+      <div class="set-item"><span>Âge</span><input class="prof-in" data-prof="age" inputmode="numeric" value="${p.age}"></div>
+      <div class="set-item"><span>Sexe<small>Pour le calcul du métabolisme</small></span><select data-prof="sex">${sexOptions(p.sex)}</select></div>
+      <div class="set-item"><span>Ajustement auto<small>Déduit de ta courbe de poids</small></span>${f.kcalAdj
+        ? `<span class="row"><b>${signed(f.kcalAdj, 0)} kcal</b><button class="btn sm" data-act="food-reset-adj">Remettre à 0</button></span>`
+        : '<span class="muted">aucun</span>'}</div>
+    </div>
+
+    <h2 class="section">ASTUCES ICH</h2>
+    <div class="panel">
+      <ul class="cues" style="margin:0">
+        ${p.goal === 'cut' ? '' : '<li><span><b>Le shaker ICH</b> : 500 ml de lait entier, 80 g de flocons d\'avoine, 1 banane et 30 g de beurre de cacahuète, mixés. ≈ 900 kcal et 35 g de protéines.</span></li>'}
+        <li><span><b>4 repas</b> avec 30 à 40 g de protéines chacun : plus simple que 2 repas énormes.</span></li>
+        <li><span><b>Les 2 premières semaines</b>, la balance prend vite environ 1 kg (eau et glycogène). Normal, ce n'est pas du gras.</span></li>
+        <li><span><b>Tour de taille</b> : mesure-le au nombril une fois par mois. S'il gonfle plus vite que tes bras, ça monte trop vite.</span></li>
+      </ul>
+    </div></div>`;
+}
+
+function weigh() {
+  const inp = $('#weighIn');
+  const v = num(inp.value);
+  if (!(v >= 30 && v <= 250)) { toast('Ton poids en kg, genre 68,5.'); inp.focus(); return; }
+  const k = todayIso();
+  const had = S.food.weights[k] !== undefined;
+  S.food.weights[k] = Math.round(v * 100) / 100;
+  save(); render();
+  toast(had ? 'Pesée corrigée.' : 'Pesée notée. ICH !');
+}
+
+function foodSetup() {
+  const h = num($('#fHeight').value), w = num($('#fWeight').value), a = num($('#fAge').value);
+  if (!(h >= 120 && h <= 230)) return toast('Ta taille en cm, genre 175.');
+  if (!(w >= 30 && w <= 250)) return toast('Ton poids en kg, genre 68,5.');
+  if (!(a >= 14 && a <= 90)) return toast('Ton âge, champion ?');
+  Object.assign(S.food.profile, { height: Math.round(h), age: Math.round(a), sex: $('#fSex').value, goal: $('#fGoal').value });
+  const k = todayIso();
+  S.food.weights[k] = Math.round(w * 100) / 100;
+  S.food.adjustedAt = k;
+  save(); render();
+  burst('À TABLE !!!');
 }
 
 // ───────────────────────── Fiche exercice ─────────────────────────
@@ -606,6 +864,7 @@ function render() {
     case 'session': html = viewSession(arg); break;
     case 'workout': html = viewWorkout(); break;
     case 'history': html = viewHistory(); break;
+    case 'food': html = viewFood(); break;
     case 'settings': html = viewSettings(); break;
     case 'done': html = viewDone(arg); break;
     default: html = viewToday();
@@ -616,7 +875,9 @@ function render() {
   if (animate) { window.scrollTo(0, 0); editing = route === 'session' ? editing : false; }
   lastRoute = key;
 
-  const tab = { '': 'today', week: 'week', session: 'week', history: 'history', settings: 'settings', done: 'history' }[route];
+  if (route === 'food') bindChart();
+
+  const tab = { '': 'today', week: 'week', session: 'week', food: 'food', history: 'history', settings: 'settings', done: 'history' }[route];
   document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === tab));
   const resume = $('#resume');
   const showResume = S.active && route !== 'workout';
@@ -700,6 +961,37 @@ document.addEventListener('click', e => {
       setTimeout(() => URL.revokeObjectURL(a.href), 2000);
       break;
     }
+    case 'food-setup': foodSetup(); break;
+    case 'weigh': weigh(); break;
+    case 'prot': {
+      const k = todayIso();
+      const goal = foodNow().t.protein;
+      const before = S.food.protein[k] || 0;
+      const after = Math.max(0, before + +el.dataset.g);
+      if (after) S.food.protein[k] = after; else delete S.food.protein[k];
+      save(); render(); buzz(30);
+      if (before < goal && after >= goal) { burst('PROTÉINES !!!'); yell(); }
+      break;
+    }
+    case 'del-weight':
+      if (confirm(`Supprimer la pesée du ${fmtDay(el.dataset.d)} ?`)) { delete S.food.weights[el.dataset.d]; save(); render(); }
+      break;
+    case 'food-apply': {
+      const d = +el.dataset.delta;
+      S.food.kcalAdj += d;
+      S.food.adjustedAt = todayIso();
+      save(); render();
+      toast(`${signed(d, 0)} kcal par jour. Prochain bilan dans 2 semaines.`);
+      break;
+    }
+    case 'food-skip':
+      // on refait le point dans 7 jours
+      S.food.adjustedAt = shiftDay(todayIso(), -7);
+      save(); render(); toast('OK, on refait le point dans 7 jours.');
+      break;
+    case 'food-reset-adj':
+      if (confirm('Remettre l\'ajustement automatique à 0 kcal ?')) { S.food.kcalAdj = 0; S.food.adjustedAt = todayIso(); save(); render(); }
+      break;
     case 'reset':
       if (confirm('Tout effacer ? Historique, records et réglages disparaîtront. Irréversible.')) { resetAll(); hideRest(); location.hash = '#/'; render(); toast('Table rase. ICH !'); }
       break;
@@ -745,7 +1037,9 @@ app.addEventListener('input', e => {
 });
 
 app.addEventListener('keydown', e => {
-  if (e.key !== 'Enter' || !e.target.matches('.set-row input')) return;
+  if (e.key !== 'Enter') return;
+  if (e.target.id === 'weighIn') { e.preventDefault(); weigh(); return; }
+  if (!e.target.matches('.set-row input')) return;
   e.preventDefault();
   const row = e.target.closest('.set-row');
   if (e.target.dataset.f === 'kg') row.querySelector('.reps').focus();
@@ -766,6 +1060,24 @@ app.addEventListener('change', e => {
     if (f === 'rest') v = +v;
     if (f === 'reps') v = v.trim() || SESSIONS[sid].exercises[i].reps;
     S.overrides[key] = { ...(S.overrides[key] || {}), [f]: v };
+    save(); render();
+  } else if (t.dataset.prof) {
+    const f = t.dataset.prof;
+    const P = S.food.profile;
+    if (f === 'goal' || f === 'sex') {
+      P[f] = t.value;
+      // nouvel objectif = nouvelles calories : le bilan repart de zéro
+      if (f === 'goal') { S.food.adjustedAt = todayIso(); toast(`Objectif : ${GOALS[t.value].label}. ICH !`); }
+    } else {
+      const v = Math.round(num(t.value));
+      const ok = f === 'height' ? v >= 120 && v <= 230 : v >= 14 && v <= 90;
+      if (!ok) { toast('Valeur bizarre, je garde l\'ancienne.'); render(); return; }
+      P[f] = v;
+    }
+    save(); render();
+  } else if (t.dataset.crea !== undefined) {
+    const k = todayIso();
+    if (t.checked) S.food.creatine[k] = true; else delete S.food.creatine[k];
     save(); render();
   } else if (t.dataset.setting) {
     S.settings[t.dataset.setting] = t.checked; save();
