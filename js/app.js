@@ -1,7 +1,7 @@
 import { EXERCISES, SESSIONS, DAY_NAMES, DAY_SHORT, CYCLE_WEEKS, SHOUTS, REST_LINES } from './data.js';
 import { S, save, mondayOf, isoDay, replaceAll, resetAll } from './store.js';
 import * as sound from './sound.js';
-import { RECIPES, RECIPE, weekStart, defaultPicks, swapPick, mealPlan, shoppingList, fmtQty, SUNDAY_DISH } from './recipes.js';
+import { RECIPES, RECIPE, BREAKFASTS, weekStart, defaultPicks, swapPick, mealPlan, shoppingList, fmtQty, SUNDAY_DISH } from './recipes.js';
 import { GOALS, goalOf, targets, aimKg, sortedWeights, avgWeight, currentWeight, trend, review, series, streak, shiftDay } from './food.js';
 
 // ───────────────────────── Utilitaires ─────────────────────────
@@ -650,6 +650,9 @@ function menuSunday(arg) {
   return new Date(t + 'T12:00:00').getDay() === 6 ? shiftDay(cur, 7) : cur;
 }
 const picksFor = sun => S.food.menus[sun] || defaultPicks(sun);
+// Petit-déj fixe et shaker (par défaut : shaker sauf en sèche)
+const breakfastId = () => (BREAKFASTS.includes(S.food.daily.breakfast) ? S.food.daily.breakfast : BREAKFASTS[0]);
+const shakerOn = () => S.food.daily.shaker ?? (S.food.profile.goal !== 'cut');
 
 // On ne garde que les menus et listes des 4 dernières semaines
 function pruneWeeks() {
@@ -662,20 +665,24 @@ function viewMenu(arg) {
   const isNext = sun !== weekStart(todayIso());
   const picks = picksFor(sun);
   const plan = mealPlan(sun, picks);
-  const list = shoppingList([...picks, SUNDAY_DISH]);
+  const bf = RECIPE[breakfastId()];
+  const sh = shakerOn() ? RECIPE.shaker : null;
+  const list = shoppingList([...picks, SUNDAY_DISH, { id: bf.id, n: 7 }, ...(sh ? [{ id: sh.id, n: 7 }] : [])]);
   const checked = S.food.shop[sun] || {};
   const nDone = list.groups.reduce((n, g) => n + g.items.filter(i => checked[i.key]).length, 0);
+  // Moyenne par jour : midi + soir du menu, plus le petit-déj et le shaker de tous les jours
   const meals = plan.flatMap(d => [d.midi, d.soir]).map(id => RECIPE[id]);
-  const avgK = meals.reduce((s, r) => s + r.kcal, 0) / 7;
-  const avgP = meals.reduce((s, r) => s + r.p, 0) / 7;
+  const avgK = meals.reduce((s, r) => s + r.kcal, 0) / 7 + bf.kcal + (sh ? sh.kcal : 0);
+  const avgP = meals.reduce((s, r) => s + r.p, 0) / 7 + bf.p + (sh ? sh.p : 0);
   const today = todayIso();
-  let summary = `Midi + soir : ≈ <b>${fmtInt(avgK)} kcal</b> et <b>${Math.round(avgP)} g de protéines</b> par jour en moyenne.`;
+  let summary = `Ta journée type fait ≈ <b>${fmtInt(avgK)} kcal</b> et <b>${Math.round(avgP)} g de protéines</b>.`;
   if (foodReady()) {
     const { t } = foodNow();
-    const rk = t.kcal - avgK, rp = t.protein - avgP;
-    summary += rk > 50
-      ? ` Pour atteindre tes ${fmtInt(t.kcal)} kcal, complète avec ≈ <b>${fmtInt(rk)} kcal</b>${rp > 0 ? ` et <b>${Math.round(rp)} g de protéines</b>` : ''} au petit-déj et en collations (shaker ICH, riz au lait…).`
-      : ' Ça couvre déjà ton objectif du jour : garde un petit-déj léger.';
+    const diff = avgK - t.kcal;
+    if (Math.abs(diff) <= 150) summary += ` Pile dans ton objectif de ${fmtInt(t.kcal)} kcal. ICH&nbsp;!`;
+    else if (diff < 0) summary += ` Il te manque ≈ <b>${fmtInt(-diff)} kcal</b> pour tes ${fmtInt(t.kcal)} : ${sh ? 'ajoute un fruit et une poignée d\'amandes' : 'remets le shaker'}.`;
+    else summary += ` C'est ≈ <b>${fmtInt(diff)} kcal</b> de plus que tes ${fmtInt(t.kcal)} : ${sh ? 'garde le shaker pour les jours de séance' : 'prends des portions un peu plus petites'}.`;
+    if (avgP < t.protein) summary += ` Protéines : il en manque ≈ ${Math.round(t.protein - avgP)} g.`;
   }
   const meal = (id, frozen) => {
     const r = RECIPE[id];
@@ -705,6 +712,20 @@ function viewMenu(arg) {
         <span class="chev">›</span>
       </button>
     </div>
+
+    <h2 class="section">CHAQUE JOUR</h2>
+    <div class="recipe-list">
+      <div class="panel recipe-card pick">
+        <span class="r-emoji" aria-hidden="true">${bf.emoji}</span>
+        <button class="r-main" data-act="recipe" data-id="${bf.id}"><b>${esc(bf.name)}</b><small>Le matin · ${bf.kcal} kcal · ${bf.p} g prot.</small></button>
+        <button class="btn sm" data-act="daily-swap" aria-label="Changer de petit-déj">↻</button>
+      </div>
+      <div class="panel recipe-card pick ${sh ? '' : 'off'}">
+        <span class="r-emoji" aria-hidden="true">${RECIPE.shaker.emoji}</span>
+        <button class="r-main" data-act="recipe" data-id="shaker"><b>Shaker ICH</b><small>${sh ? `Après la séance ou à 16 h · ${RECIPE.shaker.kcal} kcal · ${RECIPE.shaker.p} g prot.` : 'Désactivé'}</small></button>
+        <label class="switch" aria-label="Shaker tous les jours"><input type="checkbox" data-daily="shaker" ${sh ? 'checked' : ''}><span></span></label>
+      </div>
+    </div>
     <div class="hint" style="margin-top:14px">🍽️ ${summary}</div>
 
     <h2 class="section">ORGANISATION</h2>
@@ -713,9 +734,11 @@ function viewMenu(arg) {
       <li><span><b>Dimanche ${fmtShort(sun)}</b> : les 3 plats au Cookeo, l'un après l'autre (≈ 1 h 30, rince la cuve entre deux). Midi et soir : saumon frais.</span></li>
       <li><span><b>Dimanche soir</b> : 6 boîtes au frigo pour lundi → mercredi, 6 au congélateur pour jeudi → samedi.</span></li>
       <li><span><b>Mercredi, jeudi et vendredi soir</b> : sors les 2 boîtes du lendemain du congélateur et mets-les au frigo.</span></li>
+      ${bf.id === 'bol' ? '<li><span><b>Le soir</b> : prépare le bol du lendemain (2 min), ou 3 bocaux d\'un coup, ils tiennent 3 jours.</span></li>' : ''}
     </ul></div>
 
     <h2 class="section">LES REPAS</h2>
+    <p class="small muted" style="margin:-4px 0 10px;font-weight:700">Et chaque jour : ${bf.emoji} ${esc(bf.short)} le matin${sh ? ' et 🥤 shaker l\'après-midi' : ''}.</p>
     <div class="panel days">
       <div class="day-row head"><span></span><span>MIDI</span><span>SOIR</span></div>
       ${plan.map(d => `<div class="day-row ${d.date === today ? 'today' : ''}">
@@ -754,13 +777,13 @@ function addProtein(delta) {
 
 const md = s => esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
 function openRecipe(id) {
-  const r = RECIPES.find(x => x.id === id);
+  const r = RECIPE[id];
   if (!r) return;
   const wrap = $('#sheet');
   wrap.firstElementChild.innerHTML = `<div class="grab"></div>
     <div class="r-hero" aria-hidden="true">${r.emoji}</div>
     <h2>${esc(r.name)}</h2>
-    <p class="muted" style="margin:2px 0 0;font-weight:700">${r.portions} portions · ≈ ${r.time} min · ${esc(r.tag)}</p>
+    <p class="muted" style="margin:2px 0 0;font-weight:700">${r.portions} portion${r.portions > 1 ? 's' : ''} · ≈ ${r.time} min · ${esc(r.tag)}</p>
     <div class="macros four t-food">
       <div><b>${r.kcal}</b><span>kcal</span></div>
       <div><b>${r.p} g</b><span>prot.</span></div>
@@ -770,10 +793,10 @@ function openRecipe(id) {
     <p class="small muted" style="margin:-4px 0 0">Par portion, valeurs approximatives.</p>
     <h3 class="sheet-h">INGRÉDIENTS</h3>
     <ul class="ingr">${r.ingredients.map(i => `<li>${esc(i)}</li>`).join('')}</ul>
-    <h3 class="sheet-h">AU COOKEO</h3>
+    <h3 class="sheet-h">${r.how || 'AU COOKEO'}</h3>
     <ol class="steps">${r.steps.map(s => `<li><span>${md(s)}</span></li>`).join('')}</ol>
     ${r.tip ? `<div class="hint warm">💡 ${esc(r.tip)}</div>` : ''}
-    <div class="t-food"><button class="btn big" data-act="eat" data-id="${r.id}" style="background:var(--accent)">J'EN MANGE UNE ! +${r.p} G</button></div>
+    <div class="t-food"><button class="btn big" data-act="eat" data-id="${r.id}" style="background:var(--accent)">${r.eat || 'J\'EN MANGE UNE !'} +${r.p} G</button></div>
     <button class="btn block" data-act="close-sheet" style="margin-top:10px">Fermer</button>`;
   wrap.classList.remove('hidden');
   wrap.firstElementChild.scrollTop = 0;
@@ -1133,8 +1156,15 @@ document.addEventListener('click', e => {
       break;
     }
     case 'shop-reset': delete S.food.shop[el.dataset.w]; save(); render(); break;
+    case 'daily-swap': {
+      const next = BREAKFASTS[(BREAKFASTS.indexOf(breakfastId()) + 1) % BREAKFASTS.length];
+      S.food.daily.breakfast = next;
+      save(); render();
+      toast(`Petit-déj : ${RECIPE[next].name}`);
+      break;
+    }
     case 'eat': {
-      const r = RECIPES.find(x => x.id === el.dataset.id);
+      const r = RECIPE[el.dataset.id];
       if (!r) break;
       closeSheet();
       const total = addProtein(r.p);
@@ -1242,6 +1272,9 @@ app.addEventListener('change', e => {
       if (!ok) { toast('Valeur bizarre, je garde l\'ancienne.'); render(); return; }
       P[f] = v;
     }
+    save(); render();
+  } else if (t.dataset.daily === 'shaker') {
+    S.food.daily.shaker = t.checked;
     save(); render();
   } else if (t.dataset.shop !== undefined) {
     const w = t.dataset.w;

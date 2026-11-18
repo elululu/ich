@@ -249,7 +249,51 @@ const EXTRA = {
 };
 RECIPES.forEach(r => Object.assign(r, EXTRA[r.id]));
 
-export const RECIPE = Object.fromEntries(RECIPES.map(r => [r.id, r]));
+// Ce qu'on mange tous les jours, en plus des plats du menu (achats comptés pour 1 jour)
+export const DAILY = [
+  {
+    id: 'bol', emoji: '🥣', name: 'Bol skyr-avoine', short: 'Bol skyr-avoine', tag: 'Petit-déj', slot: 'breakfast',
+    portions: 1, time: 5, kcal: 760, p: 47, l: 20, g: 94, how: 'PRÉPARATION', eat: 'JE LE MANGE !',
+    ingredients: ['80 g de flocons d\'avoine', '250 g de skyr nature', '100 ml de lait entier', '1 banane', '20 g de beurre de cacahuète', '1 c. à café de miel'],
+    steps: [
+      'La veille au soir, dans un bocal : flocons d\'avoine, skyr, lait, beurre de cacahuète et miel. Mélange bien.',
+      'Ferme et laisse au frigo pour la nuit : l\'avoine gonfle et devient crémeuse.',
+      'Le matin, ajoute la banane en rondelles. C\'est prêt.'
+    ],
+    tip: 'Tu peux préparer 3 bocaux d\'un coup : ils se gardent 3 jours au frigo. Ajoute la banane seulement le matin, sinon elle noircit.',
+    shop: [['epicerie', 'Flocons d\'avoine', 80, 'g'], ['frais', 'Skyr nature', 250, 'g'], ['frais', 'Lait entier', 100, 'ml'],
+      ['legumes', 'Bananes', 1, 'pc'], ['epicerie', 'Beurre de cacahuète', 20, 'g'], ['placard', 'Miel']]
+  },
+  {
+    id: 'oeufs', emoji: '🍳', name: 'Œufs brouillés & tartines', short: 'Œufs & tartines', tag: 'Petit-déj', slot: 'breakfast',
+    portions: 1, time: 10, kcal: 685, p: 45, l: 34, g: 45, how: 'PRÉPARATION', eat: 'JE LES MANGE !',
+    ingredients: ['3 œufs', '2 tranches de pain complet (80 g)', '½ avocat', '1 pot de skyr nature (150 g)', '1 noisette de beurre', 'Sel, poivre'],
+    steps: [
+      'Fais griller le pain.',
+      'Bats les œufs avec le sel et le poivre. Dans une poêle beurrée, à feu doux, remue sans arrêt 2 à 3 min : retire-les quand ils sont encore un peu baveux.',
+      'Écrase l\'avocat sur les tartines et pose les œufs dessus. Le skyr en dessert.'
+    ],
+    tip: 'Pour une personne en bonne santé, 3 œufs par jour ne posent pas de problème. Si tu as du cholestérol, demande l\'avis de ton médecin.',
+    shop: [['frais', 'Œufs', 3, 'pc'], ['epicerie', 'Pain complet', 80, 'g'], ['legumes', 'Avocats', 0.5, 'pc'],
+      ['frais', 'Skyr nature', 150, 'g'], ['placard', 'Beurre']]
+  },
+  {
+    id: 'shaker', emoji: '🥤', name: 'Shaker ICH', short: 'Shaker ICH', tag: 'Collation', slot: 'snack',
+    portions: 1, time: 2, kcal: 900, p: 35, l: 39, g: 100, how: 'PRÉPARATION', eat: 'JE LE BOIS !',
+    ingredients: ['500 ml de lait entier', '80 g de flocons d\'avoine', '1 banane', '30 g de beurre de cacahuète'],
+    steps: [
+      'Mets tout dans un blender.',
+      'Mixe 30 secondes, jusqu\'à ce que ce soit bien lisse.',
+      'Bois-le dans l\'heure qui suit ta séance, ou vers 16 h les jours sans entraînement.'
+    ],
+    tip: 'Les jours où tu as du mal à finir tes assiettes, c\'est lui qui sauve ta prise de masse : 900 kcal qui se boivent en 2 minutes.',
+    shop: [['frais', 'Lait entier', 500, 'ml'], ['epicerie', 'Flocons d\'avoine', 80, 'g'], ['legumes', 'Bananes', 1, 'pc'],
+      ['epicerie', 'Beurre de cacahuète', 30, 'g']]
+  }
+];
+export const BREAKFASTS = DAILY.filter(d => d.slot === 'breakfast').map(d => d.id);
+
+export const RECIPE = Object.fromEntries([...RECIPES, ...DAILY].map(r => [r.id, r]));
 // Plats de batch cooking (4 portions) qui tournent d'une semaine à l'autre
 export const MAIN = RECIPES.filter(r => r.portions === 4 && r.tag !== 'Collation').map(r => r.id);
 export const SUNDAY_DISH = 'saumon';
@@ -295,17 +339,21 @@ export const RAYONS = [
   ['surgeles', 'Surgelés'], ['epicerie', 'Épicerie']
 ];
 
-// Additionne les achats de plusieurs recettes, classés par rayon
-export function shoppingList(ids) {
+// Additionne les achats de plusieurs recettes, classés par rayon.
+// Chaque entrée est un id (recette faite une fois) ou { id, n } (recette faite n fois, ex. 7 petits-déj).
+export function shoppingList(entries) {
   const items = new Map();
   const placard = new Set();
-  ids.forEach(id => RECIPE[id].shop.forEach(([rayon, label, q, u]) => {
-    if (rayon === 'placard') { placard.add(label); return; }
-    const key = `${rayon}|${label}|${u}`;
-    const it = items.get(key) || { key, rayon, label, q: 0, u };
-    it.q += q;
-    items.set(key, it);
-  }));
+  entries.forEach(e => {
+    const [id, n] = typeof e === 'string' ? [e, 1] : [e.id, e.n];
+    RECIPE[id].shop.forEach(([rayon, label, q, u]) => {
+      if (rayon === 'placard') { placard.add(label); return; }
+      const key = `${rayon}|${label}|${u}`;
+      const it = items.get(key) || { key, rayon, label, q: 0, u };
+      it.q += q * n;
+      items.set(key, it);
+    });
+  });
   const all = [...items.values()];
   return {
     groups: RAYONS.map(([rayon, title]) => ({
@@ -322,9 +370,10 @@ export function fmtQty(q, u) {
   switch (u) {
     case 'g': return q >= 1000 ? `${n(q / 1000)} kg` : `${q} g`;
     case 'ml': return q >= 1000 ? `${n(q / 1000)} L` : `${q} ml`;
-    case 'boite': return plural(q, 'boîte', 'boîtes');
-    case 'gousse': return plural(q, 'gousse', 'gousses');
-    case 'morceau': return plural(q, 'morceau', 'morceaux');
-    default: return `× ${q}`;
+    // à l'unité, on arrondit au-dessus : 3,5 avocats → 4 à acheter
+    case 'boite': return plural(Math.ceil(q), 'boîte', 'boîtes');
+    case 'gousse': return plural(Math.ceil(q), 'gousse', 'gousses');
+    case 'morceau': return plural(Math.ceil(q), 'morceau', 'morceaux');
+    default: return `× ${Math.ceil(q)}`;
   }
 }

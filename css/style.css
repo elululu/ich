@@ -465,6 +465,7 @@ h2.section::after { content: ''; flex: 1; height: 3px; background: var(--ink); b
 .menu-cta .chev, .recipe-card .chev { font-family: 'Bangers', sans-serif; font-size: 26px; line-height: 1; }
 .pick .r-main { background: none; border: 0; padding: 0; text-align: left; cursor: pointer; }
 .pick .btn.sm { font-size: 18px; padding: 6px 12px; }
+.pick.off .r-emoji, .pick.off .r-main { opacity: .45; }
 .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .seg a {
   text-align: center; text-decoration: none; color: var(--ink); font-weight: 800; font-size: 14px;

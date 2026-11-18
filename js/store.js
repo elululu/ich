@@ -38,7 +38,8 @@ function defaultFood() {
     protein: {},       // { 'AAAA-MM-JJ': grammes }
     creatine: {},      // { 'AAAA-MM-JJ': true }
     menus: {},         // { dimanche 'AAAA-MM-JJ': [3 id de recettes] } quand on a changé un plat
-    shop: {}           // { dimanche 'AAAA-MM-JJ': { article: true } } liste de courses cochée
+    shop: {},          // { dimanche 'AAAA-MM-JJ': { article: true } } liste de courses cochée
+    daily: { breakfast: 'bol', shaker: null } // petit-déj fixe ; shaker : null = selon l'objectif
   };
 }
 
