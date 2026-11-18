@@ -1,5 +1,5 @@
 // ICH !!! service worker — tout marche hors ligne, même au sous-sol de la salle.
-const VERSION = 'ich-v6';
+const VERSION = 'ich-v7';
 const MEDIA = 'ich-media-v1';
 const CORE = [
   './',

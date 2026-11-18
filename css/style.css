@@ -351,6 +351,12 @@ h2.section::after { content: ''; flex: 1; height: 3px; background: var(--ink); b
 .empty { text-align: center; padding: 24px 16px; }
 .empty img { width: 150px; margin: 0 auto 8px; filter: drop-shadow(3px 3px 0 var(--ink)); }
 
+/* Courbes de progression */
+.curve-select {
+  width: 100%; border: 2.5px solid var(--ink); border-radius: 12px; background: var(--paper-2);
+  padding: 10px; font-weight: 800; font-size: 15px;
+}
+
 /* ───────── Fin de séance ───────── */
 .done-hero { text-align: center; }
 .done-hero img { width: min(70vw, 280px); margin: 0 auto -10px; filter: drop-shadow(5px 5px 0 var(--ink)); animation: bubble-in .6s cubic-bezier(.2, 1.6, .4, 1) both; }

@@ -376,6 +376,144 @@ function logRows(l) {
   return l.entries.map(e => `<div><span><b>${esc(EXERCISES[e.ex]?.name || e.ex)}</b></span><span>${e.sets.map(x => `${fmtKg(x.kg)}×${x.reps}`).join(' · ')}</span></div>`).join('');
 }
 
+// ───────────────────────── Courbes de progression ─────────────────────────
+// Type de séance de chaque exercice (couleur de la courbe), d'après le programme
+const EX_TYPE = {};
+Object.values(SESSIONS).forEach(s => s.exercises.forEach(e => { EX_TYPE[e.ex] ??= s.type; }));
+const CURVE_MODES = {
+  e1rm: { label: '1RM estimé', unit: 'kg' },
+  bw: { label: '1RM estimé en lest', unit: 'kg' },
+  reps: { label: 'Reps max', unit: 'reps' }
+};
+let curveEx = null;   // exercice affiché (choix gardé le temps de la session)
+let curve = null;     // données du graphique pour le survol
+
+// Poids de corps à une date : la dernière pesée avant, sinon la première pesée
+function bodyweightAt(day) {
+  const days = Object.keys(S.food.weights).sort();
+  if (!days.length) return null;
+  let pick = days[0];
+  for (const d of days) { if (d <= day) pick = d; else break; }
+  return S.food.weights[pick];
+}
+
+function curveMode(id) {
+  if (id === 'hanging_leg_raise') return 'reps';
+  if (BODYWEIGHT.has(id)) return Object.keys(S.food.weights).length ? 'bw' : 'reps';
+  return 'e1rm';
+}
+
+// Un point par séance (hors deload) : la meilleure série selon le mode
+function curvePoints(id, mode) {
+  const pts = [];
+  S.logs.filter(l => !l.deload).forEach(l => l.entries.filter(e => e.ex === id).forEach(e => {
+    const d = isoDay(new Date(l.date));
+    const bw = mode === 'bw' ? bodyweightAt(d) : 0;
+    let y = 0, top = null;
+    e.sets.forEach(s => {
+      const v = mode === 'reps' ? s.reps
+        : mode === 'bw' ? (bw + s.kg) * (1 + Math.min(s.reps, 12) / 30) - bw // charge totale estimée moins le poids de corps
+        : e1rm(s);
+      if (s.reps > 0 && v > y) { y = v; top = s; }
+    });
+    if (top) pts.push({ t: new Date(l.date).getTime(), d, y, s: top });
+  }));
+  return pts.sort((a, b) => a.t - b.t);
+}
+
+// Arrondi au kilo, comme la liste des records
+const fmtCurve = v => Math.round(v).toLocaleString('fr-FR');
+
+function curveReadout(p) {
+  const { mode } = curve;
+  const set = mode === 'reps' ? `${p.s.reps} reps` : `${mode === 'bw' ? 'lest ' : ''}${fmtKg(p.s.kg)} kg × ${p.s.reps}`;
+  return `${fmtDay(p.d)} · <b>${fmtCurve(p.y)} ${CURVE_MODES[mode].unit}</b> · meilleure série : ${set}`;
+}
+
+function curveChart(pts, mode) {
+  const W = 320, H = 150, L = 34, R = 44, T = 10, B = 22;
+  if (pts.length < 2) { curve = null; return '<p class="small muted" style="margin:12px 0 0">La courbe apparaît après 2 séances sur cet exercice.</p>'; }
+  const t0 = pts[0].t, t1 = pts[pts.length - 1].t;
+  const ys = pts.map(p => p.y);
+  let lo = Math.min(...ys), hi = Math.max(...ys);
+  const step = [0.5, 1, 2, 2.5, 5, 10, 20, 25, 50, 100].find(s => s >= Math.max(hi - lo, 1) / 4) || 100;
+  lo = Math.max(0, Math.floor((lo - step * 0.3) / step) * step);
+  hi = Math.ceil((hi + step * 0.3) / step) * step;
+  const x = t => L + (t1 === t0 ? 0.5 : (t - t0) / (t1 - t0)) * (W - L - R);
+  const y = v => T + ((hi - v) / (hi - lo)) * (H - T - B);
+  const ticks = [];
+  for (let v = lo; v <= hi + 1e-9; v += step) ticks.push(v);
+  const last = pts[pts.length - 1];
+  curve = { pts, x, y, mode, last, W };
+  return `<div class="chart-read" id="cRead">${curveReadout(last)}</div>
+    <svg class="wchart" id="cChart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${CURVE_MODES[mode].label} de chaque séance. Dernière valeur : ${fmtCurve(last.y)} ${CURVE_MODES[mode].unit}.">
+      ${ticks.map(v => `<line class="grid" x1="${L}" x2="${W - R}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/><text class="ax" x="${L - 6}" y="${(y(v) + 3.5).toFixed(1)}" text-anchor="end">${fmtNum(v, step < 1 ? 1 : 0)}</text>`).join('')}
+      <text class="ax" x="${L}" y="${H - 6}">${fmtShort(pts[0].d)}</text>
+      <text class="ax" x="${W - R}" y="${H - 6}" text-anchor="end">${fmtShort(last.d)}</text>
+      <line class="xh" id="cXh" y1="${T}" y2="${H - B}" style="display:none"/>
+      <path class="avg" d="${pts.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.y).toFixed(1)}`).join('')}"/>
+      ${pts.slice(0, -1).map(p => `<circle class="end" cx="${x(p.t).toFixed(1)}" cy="${y(p.y).toFixed(1)}" r="4"/>`).join('')}
+      <circle class="end" cx="${x(last.t).toFixed(1)}" cy="${y(last.y).toFixed(1)}" r="5"/>
+      <text class="lbl" x="${(x(last.t) + 9).toFixed(1)}" y="${(y(last.y) + 4).toFixed(1)}">${fmtCurve(last.y)}</text>
+      <circle class="focus" id="cFocus" r="5.5" style="display:none"/>
+    </svg>`;
+}
+
+function bindCurve() {
+  const svg = $('#cChart');
+  if (!svg || !curve) return;
+  const read = $('#cRead'), xh = $('#cXh'), focus = $('#cFocus');
+  const show = ev => {
+    const r = svg.getBoundingClientRect();
+    const vx = ((ev.clientX - r.left) / r.width) * curve.W;
+    const p = curve.pts.reduce((a, b) => (Math.abs(curve.x(b.t) - vx) < Math.abs(curve.x(a.t) - vx) ? b : a));
+    const cx = curve.x(p.t).toFixed(1);
+    xh.setAttribute('x1', cx); xh.setAttribute('x2', cx); xh.style.display = '';
+    focus.setAttribute('cx', cx); focus.setAttribute('cy', curve.y(p.y).toFixed(1)); focus.style.display = '';
+    read.innerHTML = curveReadout(p);
+  };
+  svg.addEventListener('pointerdown', show);
+  svg.addEventListener('pointermove', show);
+  svg.addEventListener('pointerleave', () => { xh.style.display = 'none'; focus.style.display = 'none'; read.innerHTML = curveReadout(curve.last); });
+}
+
+function curveSection() {
+  const sessions = id => S.logs.filter(l => !l.deload && l.entries.some(e => e.ex === id)).length;
+  const ids = Object.keys(EXERCISES).filter(id => sessions(id) > 0);
+  if (!ids.length) return '';
+  if (!ids.includes(curveEx)) curveEx = ids.reduce((a, b) => (sessions(b) > sessions(a) ? b : a));
+  const mode = curveMode(curveEx);
+  const pts = curvePoints(curveEx, mode);
+  const M = CURVE_MODES[mode];
+  const groups = [['push', 'PUSH'], ['pull', 'PULL'], ['legs', 'LEGS'], [undefined, 'AUTRES']].map(([type, label]) => {
+    const opts = ids.filter(id => EX_TYPE[id] === type);
+    return opts.length ? `<optgroup label="${label}">${opts.map(id => `<option value="${id}" ${id === curveEx ? 'selected' : ''}>${esc(EXERCISES[id].name)} (${sessions(id)})</option>`).join('')}</optgroup>` : '';
+  }).join('');
+  let stats = '', hint = '';
+  if (pts.length >= 2) {
+    const first = pts[0].y, last = pts[pts.length - 1].y, best = Math.max(...pts.map(p => p.y));
+    const diff = last - first;
+    stats = `<div class="stats sm">
+      <div class="panel stat"><b>${fmtCurve(first)}</b><span>départ</span></div>
+      <div class="panel stat"><b>${fmtCurve(best)}</b><span>record</span></div>
+      <div class="panel stat"><b>${diff >= 0 ? '+' : '−'}${fmtCurve(Math.abs(diff))}</b><span>${first > 0 ? `${diff >= 0 ? '+' : '−'}${Math.round(Math.abs(diff) / first * 100)} %` : M.unit}</span></div>
+    </div>`;
+    const before = Math.max(...pts.slice(0, -1).map(p => p.y));
+    if (last > before + 0.01) hint = '<div class="hint go" style="margin-top:12px">🏆 Record battu à la dernière séance. ICH&nbsp;!</div>';
+    else if (pts.length >= 4 && Math.max(...pts.slice(-3).map(p => p.y)) <= Math.max(...pts.slice(0, -3).map(p => p.y)) + 0.01) {
+      hint = '<div class="hint warm" style="margin-top:12px">😐 Pas de record depuis 3 séances. Ça arrive ; si ça dure, regarde ton sommeil et tes calories (onglet BOUFFE) avant de changer d\'exercice.</div>';
+    }
+  }
+  return `<h2 class="section">COURBES</h2>
+    <div class="panel curve t-${EX_TYPE[curveEx] || 'push'}">
+      <select class="curve-select" data-curve aria-label="Exercice affiché">${groups}</select>
+      <p class="small muted" style="margin:8px 0 0">${M.label} (${M.unit}) : la meilleure série de chaque séance${mode === 'bw' ? ', calculée avec ton poids de corps' : ''}. Semaines de deload exclues.</p>
+      ${curveChart(pts, mode)}
+      ${stats}
+      ${hint}
+    </div>`;
+}
+
 function viewHistory() {
   const mon = mondayOf().getTime();
   const thisWeek = S.logs.filter(l => new Date(l.date) >= mon);
@@ -390,6 +528,7 @@ function viewHistory() {
       <div class="panel stat"><b>${S.logs.length}</b><span>séances</span></div>
     </div>
     ${S.logs.length === 0 ? `<div class="panel empty" style="margin-top:18px"><img src="img/mascot_rest.png" alt=""><p style="font-weight:800;margin:0">Rien ici encore.<br>Va soulever un truc lourd. ICH !</p></div>` : ''}
+    ${curveSection()}
     ${records.length ? `<h2 class="section">RECORDS (1RM ESTIMÉ)</h2><div class="pr-list">${records.slice(0, 10).map(r => `<div class="panel pr"><span>${esc(EXERCISES[r.id].name)}<br><small class="muted">${fmtKg(r.set.kg)} kg × ${r.set.reps} · ${fmtDate(r.date)}</small></span><b>${fmtKg(Math.round(r.e))} kg</b></div>`).join('')}</div>` : ''}
     ${S.logs.length ? `<h2 class="section">JOURNAL</h2><div class="pr-list">${[...S.logs].reverse().slice(0, 40).map(l => { const s = SESSIONS[l.sid]; return `<details class="panel log t-${s ? s.type : 'push'}">
         <summary><i></i><div><h3>${s ? s.title : esc(l.sid)}${l.prs.length ? ' <span class="pr-badge">PR</span>' : ''}</h3><p>${fmtDate(l.date)} · ${fmtDur(l.duration)} · ${l.sets} séries${l.deload ? ' · deload' : ''}</p></div><span class="vol">${(l.volume / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} t</span></summary>
@@ -1058,6 +1197,7 @@ function render() {
   lastRoute = key;
 
   if (route === 'food') bindChart();
+  if (route === 'history') bindCurve();
 
   const tab = { '': 'today', week: 'week', session: 'week', food: 'food', menu: 'food', history: 'history', settings: 'settings', done: 'history' }[route];
   document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === tab));
@@ -1273,6 +1413,9 @@ app.addEventListener('change', e => {
       P[f] = v;
     }
     save(); render();
+  } else if (t.dataset.curve !== undefined) {
+    curveEx = t.value;
+    render();
   } else if (t.dataset.daily === 'shaker') {
     S.food.daily.shaker = t.checked;
     save(); render();
