@@ -201,11 +201,10 @@ function foodMini() {
   const { today, f, t } = foodNow();
   const prot = f.protein[today] || 0;
   const w = f.weights[today];
-  return `<a class="panel food-mini t-food" href="#/food">
-    <span>🍗 <b>${prot}/${t.protein} g</b> protéines</span>
-    <span>⚖️ <b>${w !== undefined ? `${fmtNum(w)} kg` : 'Pèse-toi !'}</b></span>
-    <span class="chev">›</span>
-  </a>`;
+  return `<div class="panel food-mini t-food">
+    <a href="#/food">🍗 <b>${prot}/${t.protein} g</b> protéines ›</a>
+    <a href="#/history">⚖️ <b>${w !== undefined ? `${fmtNum(w)} kg` : 'Pèse-toi !'}</b> ›</a>
+  </div>`;
 }
 
 function viewWeek() {
@@ -305,22 +304,25 @@ function viewWorkout() {
       return `<button class="chip ${i === A.cur ? 'cur' : ''} ${d === e.sets.length ? 'complete' : ''}" data-act="goto" data-i="${i}"><span>${i + 1}. ${esc(EXERCISES[q.ex].name)}</span><small>${d}/${e.sets.length} séries</small></button>`;
     }).join('')}</div>
     <section class="panel wk-card">
-      <div class="wk-gif">
-        <span class="ex-count">${A.cur + 1}/${A.plan.length}</span>
-        <img src="gif/${ex.gif}.gif" alt="Démo animée : ${esc(ex.name)}" onerror="this.src='img/mascot.png'">
-        <button class="btn sm info-btn" data-act="info" data-ex="${p.ex}">ⓘ Technique</button>
+      <div class="wk-head">
+        <button class="wk-thumb" data-act="info" data-ex="${p.ex}" aria-label="Voir la technique : ${esc(ex.name)}">
+          <img src="gif/${ex.gif}.gif" alt="" onerror="this.src='img/mascot.png'">
+          <span class="wk-zoom" aria-hidden="true">ⓘ</span>
+        </button>
+        <div>
+          <span class="wk-count">${A.cur + 1}/${A.plan.length}</span>
+          <h2>${esc(ex.name)}</h2>
+          <div class="target">
+            <span class="tag accent">${entry.sets.length} × ${esc(p.reps)}</span>
+            <span class="tag">RPE ${p.rpe}</span>
+            <span class="tag">Tempo ${esc(p.tempo)}</span>
+            <span class="tag">⏱ ${fmtTime(p.rest)}</span>
+          </div>
+        </div>
       </div>
       <div class="wk-body">
-        <h2>${esc(ex.name)}</h2>
-        <div class="target">
-          <span class="tag accent">${entry.sets.length} × ${esc(p.reps)}</span>
-          <span class="tag">RPE ${p.rpe}</span>
-          <span class="tag">Tempo ${esc(p.tempo)}</span>
-          <span class="tag">⏱ ${fmtTime(p.rest)}</span>
-        </div>
         ${p.note ? `<div class="hint warm">⚡ ${esc(p.note)}</div>` : ''}
-        ${last ? `<div class="hint">📒 Dernière fois (${fmtDate(last.date)}) : <b>${last.sets.map(x => `${fmtKg(x.kg)}×${x.reps}`).join(' · ')}</b></div>` : ''}
-        <div class="hint ${sg.up ? 'go' : ''}">🎯 ${sg.text}</div>
+        <div class="hint ${sg.up ? 'go' : ''}">🎯 ${sg.text}${last ? `<small>📒 Dernière fois (${fmtDate(last.date)}) : <b>${last.sets.map(x => `${fmtKg(x.kg)}×${x.reps}`).join(' · ')}</b></small>` : ''}</div>
         ${warmup(p, firstKg)}
         <div class="sets">
           <div class="set-head"><span>#</span><span>${bw ? 'Lest kg' : DUMBBELL.has(p.ex) ? 'kg/haltère' : 'kg'}</span><span></span><span>Reps</span><span></span></div>
@@ -528,6 +530,7 @@ function viewHistory() {
       <div class="panel stat"><b>${S.logs.length}</b><span>séances</span></div>
     </div>
     ${S.logs.length === 0 ? `<div class="panel empty" style="margin-top:18px"><img src="img/mascot_rest.png" alt=""><p style="font-weight:800;margin:0">Rien ici encore.<br>Va soulever un truc lourd. ICH !</p></div>` : ''}
+    ${weighSection()}
     ${curveSection()}
     ${records.length ? `<h2 class="section">RECORDS (1RM ESTIMÉ)</h2><div class="pr-list">${records.slice(0, 10).map(r => `<div class="panel pr"><span>${esc(EXERCISES[r.id].name)}<br><small class="muted">${fmtKg(r.set.kg)} kg × ${r.set.reps} · ${fmtDate(r.date)}</small></span><b>${fmtKg(Math.round(r.e))} kg</b></div>`).join('')}</div>` : ''}
     ${S.logs.length ? `<h2 class="section">JOURNAL</h2><div class="pr-list">${[...S.logs].reverse().slice(0, 40).map(l => { const s = SESSIONS[l.sid]; return `<details class="panel log t-${s ? s.type : 'push'}">
@@ -536,11 +539,58 @@ function viewHistory() {
       </details>`; }).join('')}</div>` : ''}`;
 }
 
+// ───────────────────────── Pesée (onglet PROGRÈS) ─────────────────────────
+function weighSection() {
+  const today = todayIso();
+  const W = S.food.weights;
+  const w = W[today];
+  const ref = currentWeight(W, today);
+  const avg7 = avgWeight(W, today);
+  const rate = trend(W, today);
+  const all = sortedWeights(W);
+  const recent = all.filter(x => x.d > shiftDay(today, -14)).length;
+  return `<h2 class="section">PESÉE DU MATIN</h2>
+    <div class="panel t-food">
+      <div class="weigh-row">
+        <input id="weighIn" inputmode="decimal" enterkeyhint="done" placeholder="${ref !== null ? fmtNum(ref) : '70,0'}" value="${w !== undefined ? fmtNum(w) : ''}" aria-label="Poids de ce matin en kg">
+        <span>kg</span>
+        <button class="btn accent" data-act="weigh">${w !== undefined ? 'Corriger' : 'Enregistrer'}</button>
+      </div>
+      <p class="small muted" style="margin:8px 0 0">Au réveil, après les toilettes, avant de manger. Ne regarde que la moyenne : le poids d'un jour bouge avec l'eau.</p>
+      ${all.length ? `<div class="stats sm">
+        <div class="panel stat"><b>${avg7 !== null ? fmtNum(avg7) : '—'}</b><span>moy. 7 j (kg)</span></div>
+        <div class="panel stat"><b>${rate !== null ? signed(rate, 2) : '—'}</b><span>kg / semaine</span></div>
+        <div class="panel stat"><b>${recent}/14</b><span>pesées</span></div>
+      </div>
+      ${weightChart(today)}
+      <details class="food-ref" data-fold="pesees" ${isOpen('pesees') ? 'open' : ''}><summary>Toutes les pesées (${all.length})</summary>
+        <div class="log-body">${[...all].reverse().slice(0, 60).map(x => `<div><span>${fmtDay(x.d)}</span><span>${fmtNum(x.kg)} kg<button class="mini-x" data-act="del-weight" data-d="${x.d}" aria-label="Supprimer la pesée du ${fmtDay(x.d)}">×</button></span></div>`).join('')}</div>
+      </details>` : ''}
+    </div>`;
+}
+
+// ───────────────────────── Profil (onglet RÉGLAGES) ─────────────────────────
+function profileSection() {
+  const f = S.food, p = f.profile;
+  return `<h2 class="section" style="margin-top:6px">TON PROFIL</h2>
+    <div class="panel set-list t-food">
+      <div class="set-item"><span>Objectif</span><select data-prof="goal">${goalOptions(p.goal)}</select></div>
+      <div class="set-item"><span>Taille<small>en cm</small></span><input class="prof-in" data-prof="height" inputmode="numeric" placeholder="175" value="${p.height ?? ''}"></div>
+      <div class="set-item"><span>Âge</span><input class="prof-in" data-prof="age" inputmode="numeric" placeholder="25" value="${p.age ?? ''}"></div>
+      <div class="set-item"><span>Sexe<small>Pour le calcul du métabolisme</small></span><select data-prof="sex">${sexOptions(p.sex)}</select></div>
+      ${foodReady() ? `<div class="set-item"><span>Ajustement auto<small>Déduit de ta courbe de poids</small></span>${f.kcalAdj
+        ? `<span class="row"><b>${signed(f.kcalAdj, 0)} kcal</b><button class="btn sm" data-act="food-reset-adj">Remettre à 0</button></span>`
+        : '<span class="muted">aucun</span>'}</div>` : ''}
+    </div>
+    ${foodReady() ? '' : '<p class="small muted" style="margin:8px 2px 0">Avec ta taille, ton âge et une première pesée (onglet PROGRÈS), l\'onglet BOUFFE calcule tes calories.</p>'}`;
+}
+
 function viewSettings() {
   const w = cycleWeek();
   const sw = (k, label, sub) => `<div class="set-item"><span>${label}<small>${sub}</small></span><label class="switch"><input type="checkbox" data-setting="${k}" ${S.settings[k] ? 'checked' : ''}><span></span></label></div>`;
   return `${topbar()}
-    <h2 class="section" style="margin-top:6px">RÉGLAGES</h2>
+    ${profileSection()}
+    <h2 class="section">RÉGLAGES</h2>
     <div class="panel set-list">
       ${sw('sound', 'Cri « ICH !!! »', 'À la fin de chaque repos')}
       ${sw('vibrate', 'Vibrations', 'Android uniquement (iOS ne vibre pas en web)')}
@@ -567,6 +617,17 @@ function viewSettings() {
 }
 
 // ───────────────────────── Alimentation ─────────────────────────
+// Sections dépliables : l'état ouvert/fermé est retenu sur le téléphone (et survit aux mises à jour de l'écran)
+let folds = {};
+try { folds = JSON.parse(localStorage.getItem('ich.folds') || '{}'); } catch { folds = {}; }
+const isOpen = (id, def = false) => folds[id] ?? def;
+function fold(id, title, body, note = '') {
+  return `<details class="fold" data-fold="${id}" ${isOpen(id) ? 'open' : ''}>
+    <summary><h2 class="section">${title}${note ? `<small>${note}</small>` : ''}<i class="fold-ic" aria-hidden="true">▾</i></h2></summary>
+    ${body}
+  </details>`;
+}
+
 function viewFoodSetup() {
   const p = S.food.profile;
   return `${topbar()}
@@ -679,11 +740,6 @@ function viewFood() {
   const prot = f.protein[today] || 0;
   const crea = !!f.creatine[today];
   const cs = streak(f.creatine, today);
-  const w = f.weights[today];
-  const avg7 = avgWeight(f.weights, today);
-  const rate = trend(f.weights, today);
-  const all = sortedWeights(f.weights);
-  const recent = all.filter(x => x.d > shiftDay(today, -14)).length;
   return `<div class="t-food">${topbar()}
     <section class="panel today" style="margin-top:6px">
       <div class="today-head"><div class="today-day">Ton objectif</div><div class="today-title">${g.title}</div><div class="today-sub">Vise ${aimText(p, kg)}</div></div>
@@ -695,7 +751,7 @@ function viewFood() {
           <div><b>${t.carbs} g</b><span>glucides</span></div>
         </div>
         ${reviewCard(review(f, today), p, kg)}
-        <p class="small muted" style="margin:8px 0 0">Maintenance estimée ${fmtInt(t.maintenance)} kcal${f.kcalAdj ? ` (dont ${signed(f.kcalAdj, 0)} kcal d'ajustement)` : ''} · ${trainingDays()} séances par semaine · calculé sur ${fmtNum(kg)} kg.</p>
+        <p class="small muted" style="margin:8px 0 0">Maintenance estimée ${fmtInt(t.maintenance)} kcal${f.kcalAdj ? ` (dont ${signed(f.kcalAdj, 0)} kcal d'ajustement)` : ''} · ${trainingDays()} séances par semaine · calculé sur ${fmtNum(kg)} kg. <a class="inline-link" href="#/settings">Modifier mon profil</a></p>
       </div>
     </section>
 
@@ -710,7 +766,7 @@ function viewFood() {
         <button class="btn accent" data-act="prot" data-g="35">+35 g</button>
       </div>
       <div class="set-item crea"><span>Créatine 5 g<small>${cs > 1 ? `🔥 ${cs} jours d'affilée` : 'Une dose par jour, même les jours off'}</small></span><label class="switch"><input type="checkbox" data-crea ${crea ? 'checked' : ''}><span></span></label></div>
-      <details class="food-ref"><summary>Repères protéines</summary><ul>
+      <details class="food-ref" data-fold="prot-ref" ${isOpen('prot-ref') ? 'open' : ''}><summary>Repères protéines</summary><ul>
         <li>100 g de blanc de poulet cuit ≈ 30 g</li>
         <li>1 boîte de thon (≈ 110 g égoutté) ≈ 28 g</li>
         <li>1 dose de whey (30 g) ≈ 24 g</li>
@@ -720,25 +776,6 @@ function viewFood() {
       </ul></details>
     </div>
 
-    <h2 class="section">PESÉE DU MATIN</h2>
-    <div class="panel">
-      <div class="weigh-row">
-        <input id="weighIn" inputmode="decimal" enterkeyhint="done" placeholder="${fmtNum(kg)}" value="${w !== undefined ? fmtNum(w) : ''}" aria-label="Poids de ce matin en kg">
-        <span>kg</span>
-        <button class="btn accent" data-act="weigh">${w !== undefined ? 'Corriger' : 'Enregistrer'}</button>
-      </div>
-      <p class="small muted" style="margin:8px 0 0">Au réveil, après les toilettes, avant de manger. Ne regarde que la moyenne : le poids d'un jour bouge avec l'eau.</p>
-      <div class="stats sm">
-        <div class="panel stat"><b>${avg7 !== null ? fmtNum(avg7) : '—'}</b><span>moy. 7 j (kg)</span></div>
-        <div class="panel stat"><b>${rate !== null ? signed(rate, 2) : '—'}</b><span>kg / semaine</span></div>
-        <div class="panel stat"><b>${recent}/14</b><span>pesées</span></div>
-      </div>
-      ${weightChart(today)}
-      <details class="food-ref"><summary>Toutes les pesées (${all.length})</summary>
-        <div class="log-body">${[...all].reverse().slice(0, 60).map(x => `<div><span>${fmtDay(x.d)}</span><span>${fmtNum(x.kg)} kg<button class="mini-x" data-act="del-weight" data-d="${x.d}" aria-label="Supprimer la pesée du ${fmtDay(x.d)}">×</button></span></div>`).join('')}</div>
-      </details>
-    </div>
-
     <h2 class="section">MENU DE LA SEMAINE</h2>
     <a class="panel recipe-card menu-cta" href="#/menu">
       <span class="r-emoji" aria-hidden="true">📅</span>
@@ -746,34 +783,21 @@ function viewFood() {
       <span class="chev">›</span>
     </a>
 
-    <h2 class="section">RECETTES COOKEO</h2>
-    <div class="recipe-list">${(p.goal === 'cut' ? [...RECIPES].sort((a, b) => a.kcal - b.kcal) : RECIPES).map(r => `
+    ${fold('recettes', 'RECETTES COOKEO', `<div class="recipe-list">${(p.goal === 'cut' ? [...RECIPES].sort((a, b) => a.kcal - b.kcal) : RECIPES).map(r => `
       <button class="panel recipe-card" data-act="recipe" data-id="${r.id}">
         <span class="r-emoji" aria-hidden="true">${r.emoji}</span>
         <span class="r-main"><b>${esc(r.name)}</b><small>≈ ${r.time} min · ${r.portions} portions · ${esc(r.tag)}</small></span>
         <span class="r-macro"><b>${r.p} g</b><small>prot.</small><b>${r.kcal}</b><small>kcal</small></span>
-      </button>`).join('')}</div>
+      </button>`).join('')}</div>`, `${RECIPES.length} recettes`)}
 
-    <h2 class="section">TON PROFIL</h2>
-    <div class="panel set-list">
-      <div class="set-item"><span>Objectif</span><select data-prof="goal">${goalOptions(p.goal)}</select></div>
-      <div class="set-item"><span>Taille<small>en cm</small></span><input class="prof-in" data-prof="height" inputmode="numeric" value="${p.height}"></div>
-      <div class="set-item"><span>Âge</span><input class="prof-in" data-prof="age" inputmode="numeric" value="${p.age}"></div>
-      <div class="set-item"><span>Sexe<small>Pour le calcul du métabolisme</small></span><select data-prof="sex">${sexOptions(p.sex)}</select></div>
-      <div class="set-item"><span>Ajustement auto<small>Déduit de ta courbe de poids</small></span>${f.kcalAdj
-        ? `<span class="row"><b>${signed(f.kcalAdj, 0)} kcal</b><button class="btn sm" data-act="food-reset-adj">Remettre à 0</button></span>`
-        : '<span class="muted">aucun</span>'}</div>
-    </div>
-
-    <h2 class="section">ASTUCES ICH</h2>
-    <div class="panel">
+    ${fold('astuces', 'ASTUCES ICH', `<div class="panel">
       <ul class="cues" style="margin:0">
         ${p.goal === 'cut' ? '' : '<li><span><b>Le shaker ICH</b> : 500 ml de lait entier, 80 g de flocons d\'avoine, 1 banane et 30 g de beurre de cacahuète, mixés. ≈ 900 kcal et 35 g de protéines.</span></li>'}
         <li><span><b>4 repas</b> avec 30 à 40 g de protéines chacun : plus simple que 2 repas énormes.</span></li>
         <li><span><b>Les 2 premières semaines</b>, la balance prend vite environ 1 kg (eau et glycogène). Normal, ce n'est pas du gras.</span></li>
         <li><span><b>Tour de taille</b> : mesure-le au nombril une fois par mois. S'il gonfle plus vite que tes bras, ça monte trop vite.</span></li>
       </ul>
-    </div></div>`;
+    </div>`)}</div>`;
 }
 
 // ───────────────────────── Menu de la semaine ─────────────────────────
@@ -1196,8 +1220,7 @@ function render() {
   if (animate) { window.scrollTo(0, 0); editing = route === 'session' ? editing : false; }
   lastRoute = key;
 
-  if (route === 'food') bindChart();
-  if (route === 'history') bindCurve();
+  if (route === 'history') { bindChart(); bindCurve(); }
 
   const tab = { '': 'today', week: 'week', session: 'week', food: 'food', menu: 'food', history: 'history', settings: 'settings', done: 'history' }[route];
   document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === tab));
@@ -1383,6 +1406,13 @@ app.addEventListener('keydown', e => {
   if (e.target.dataset.f === 'kg') row.querySelector('.reps').focus();
   else { e.target.blur(); toggleSet(+row.dataset.i); }
 });
+
+app.addEventListener('toggle', e => {
+  const d = e.target;
+  if (!d.dataset || !d.dataset.fold) return;
+  folds[d.dataset.fold] = d.open;
+  try { localStorage.setItem('ich.folds', JSON.stringify(folds)); } catch { /* stockage indisponible */ }
+}, true);
 
 app.addEventListener('focusin', e => { if (e.target.matches('.set-row input')) e.target.select(); });
 
