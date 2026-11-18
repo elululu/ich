@@ -1,6 +1,7 @@
 import { EXERCISES, SESSIONS, DAY_NAMES, DAY_SHORT, CYCLE_WEEKS, SHOUTS, REST_LINES } from './data.js';
 import { S, save, mondayOf, isoDay, replaceAll, resetAll } from './store.js';
 import * as sound from './sound.js';
+import { RECIPES, RECIPE, weekStart, defaultPicks, swapPick, mealPlan, shoppingList, fmtQty, SUNDAY_DISH } from './recipes.js';
 import { GOALS, goalOf, targets, aimKg, sortedWeights, avgWeight, currentWeight, trend, review, series, streak, shiftDay } from './food.js';
 
 // ───────────────────────── Utilitaires ─────────────────────────
@@ -599,6 +600,21 @@ function viewFood() {
       </details>
     </div>
 
+    <h2 class="section">MENU DE LA SEMAINE</h2>
+    <a class="panel recipe-card menu-cta" href="#/menu">
+      <span class="r-emoji" aria-hidden="true">📅</span>
+      <span class="r-main"><b>3 plats cuisinés le dimanche</b><small>14 repas du dimanche au samedi et la liste de courses</small></span>
+      <span class="chev">›</span>
+    </a>
+
+    <h2 class="section">RECETTES COOKEO</h2>
+    <div class="recipe-list">${(p.goal === 'cut' ? [...RECIPES].sort((a, b) => a.kcal - b.kcal) : RECIPES).map(r => `
+      <button class="panel recipe-card" data-act="recipe" data-id="${r.id}">
+        <span class="r-emoji" aria-hidden="true">${r.emoji}</span>
+        <span class="r-main"><b>${esc(r.name)}</b><small>≈ ${r.time} min · ${r.portions} portions · ${esc(r.tag)}</small></span>
+        <span class="r-macro"><b>${r.p} g</b><small>prot.</small><b>${r.kcal}</b><small>kcal</small></span>
+      </button>`).join('')}</div>
+
     <h2 class="section">TON PROFIL</h2>
     <div class="panel set-list">
       <div class="set-item"><span>Objectif</span><select data-prof="goal">${goalOptions(p.goal)}</select></div>
@@ -619,6 +635,148 @@ function viewFood() {
         <li><span><b>Tour de taille</b> : mesure-le au nombril une fois par mois. S'il gonfle plus vite que tes bras, ça monte trop vite.</span></li>
       </ul>
     </div></div>`;
+}
+
+// ───────────────────────── Menu de la semaine ─────────────────────────
+const fmtShort = d => new Date(d + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+const DOW = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM'];
+
+// Semaine affichée (dimanche → samedi). Le samedi, jour des courses, on montre la semaine suivante.
+function menuSunday(arg) {
+  const t = todayIso();
+  const cur = weekStart(t);
+  if (arg === 'next') return shiftDay(cur, 7);
+  if (arg === 'now') return cur;
+  return new Date(t + 'T12:00:00').getDay() === 6 ? shiftDay(cur, 7) : cur;
+}
+const picksFor = sun => S.food.menus[sun] || defaultPicks(sun);
+
+// On ne garde que les menus et listes des 4 dernières semaines
+function pruneWeeks() {
+  const limit = shiftDay(weekStart(todayIso()), -28);
+  ['menus', 'shop'].forEach(k => Object.keys(S.food[k]).forEach(w => { if (w < limit) delete S.food[k][w]; }));
+}
+
+function viewMenu(arg) {
+  const sun = menuSunday(arg);
+  const isNext = sun !== weekStart(todayIso());
+  const picks = picksFor(sun);
+  const plan = mealPlan(sun, picks);
+  const list = shoppingList([...picks, SUNDAY_DISH]);
+  const checked = S.food.shop[sun] || {};
+  const nDone = list.groups.reduce((n, g) => n + g.items.filter(i => checked[i.key]).length, 0);
+  const meals = plan.flatMap(d => [d.midi, d.soir]).map(id => RECIPE[id]);
+  const avgK = meals.reduce((s, r) => s + r.kcal, 0) / 7;
+  const avgP = meals.reduce((s, r) => s + r.p, 0) / 7;
+  const today = todayIso();
+  let summary = `Midi + soir : ≈ <b>${fmtInt(avgK)} kcal</b> et <b>${Math.round(avgP)} g de protéines</b> par jour en moyenne.`;
+  if (foodReady()) {
+    const { t } = foodNow();
+    const rk = t.kcal - avgK, rp = t.protein - avgP;
+    summary += rk > 50
+      ? ` Pour atteindre tes ${fmtInt(t.kcal)} kcal, complète avec ≈ <b>${fmtInt(rk)} kcal</b>${rp > 0 ? ` et <b>${Math.round(rp)} g de protéines</b>` : ''} au petit-déj et en collations (shaker ICH, riz au lait…).`
+      : ' Ça couvre déjà ton objectif du jour : garde un petit-déj léger.';
+  }
+  const meal = (id, frozen) => {
+    const r = RECIPE[id];
+    return `<button class="meal ${frozen ? 'frozen' : ''}" data-act="recipe" data-id="${id}"><span aria-hidden="true">${r.emoji}</span><span>${esc(r.short)}</span>${frozen ? '<i title="Au congélateur">🧊</i>' : ''}</button>`;
+  };
+  const sd = RECIPE[SUNDAY_DISH];
+  return `<div class="t-food">
+    <a class="back" href="#/food">← Bouffe</a>
+    <div class="sess-head"><h1>MENU</h1><p>Du dimanche ${fmtShort(sun)} au samedi ${fmtShort(shiftDay(sun, 6))}</p></div>
+    <div class="seg">
+      <a href="#/menu/now" class="${isNext ? '' : 'on'}">Cette semaine</a>
+      <a href="#/menu/next" class="${isNext ? 'on' : ''}">Semaine prochaine</a>
+    </div>
+
+    <h2 class="section">LES 3 PLATS</h2>
+    <div class="recipe-list">${picks.map((id, i) => {
+      const r = RECIPE[id];
+      return `<div class="panel recipe-card pick">
+        <span class="r-emoji" aria-hidden="true">${r.emoji}</span>
+        <button class="r-main" data-act="recipe" data-id="${id}"><b>${esc(r.name)}</b><small>4 portions · ${r.kcal} kcal · ${r.p} g prot.</small></button>
+        <button class="btn sm" data-act="menu-swap" data-w="${sun}" data-i="${i}" aria-label="Changer : ${esc(r.name)}">↻</button>
+      </div>`;
+    }).join('')}
+      <button class="panel recipe-card" data-act="recipe" data-id="${SUNDAY_DISH}">
+        <span class="r-emoji" aria-hidden="true">${sd.emoji}</span>
+        <span class="r-main"><b>${esc(sd.name)}</b><small>Le dimanche, cuisiné frais</small></span>
+        <span class="chev">›</span>
+      </button>
+    </div>
+    <div class="hint" style="margin-top:14px">🍽️ ${summary}</div>
+
+    <h2 class="section">ORGANISATION</h2>
+    <div class="panel"><ul class="cues" style="margin:0">
+      <li><span><b>Samedi ${fmtShort(shiftDay(sun, -1))}</b> : les courses avec la liste plus bas.</span></li>
+      <li><span><b>Dimanche ${fmtShort(sun)}</b> : les 3 plats au Cookeo, l'un après l'autre (≈ 1 h 30, rince la cuve entre deux). Midi et soir : saumon frais.</span></li>
+      <li><span><b>Dimanche soir</b> : 6 boîtes au frigo pour lundi → mercredi, 6 au congélateur pour jeudi → samedi.</span></li>
+      <li><span><b>Mercredi, jeudi et vendredi soir</b> : sors les 2 boîtes du lendemain du congélateur et mets-les au frigo.</span></li>
+    </ul></div>
+
+    <h2 class="section">LES REPAS</h2>
+    <div class="panel days">
+      <div class="day-row head"><span></span><span>MIDI</span><span>SOIR</span></div>
+      ${plan.map(d => `<div class="day-row ${d.date === today ? 'today' : ''}">
+        <span class="dn">${DOW[new Date(d.date + 'T12:00:00').getDay()]}<small>${fmtShort(d.date)}</small></span>
+        ${meal(d.midi, d.frozen)}${meal(d.soir, d.frozen)}
+      </div>`).join('')}
+    </div>
+
+    <h2 class="section">LISTE DE COURSES</h2>
+    <div class="panel shop">
+      <div class="prot-head"><b>${nDone}</b><span>/ ${list.count} articles</span>${nDone
+        ? `<button class="btn sm" data-act="shop-reset" data-w="${sun}">Tout décocher</button>`
+        : '<span class="small muted">coche au fur et à mesure</span>'}</div>
+      <div class="progress"><i style="width:${(nDone / list.count) * 100}%"></i></div>
+      ${list.groups.map(g => `<h3>${g.title.toUpperCase()}</h3>${g.items.map(i => `
+        <label class="shop-item ${checked[i.key] ? 'done' : ''}">
+          <input type="checkbox" data-shop="${esc(i.key)}" data-w="${sun}" ${checked[i.key] ? 'checked' : ''}>
+          <span>${esc(i.label)}</span><span class="q">${fmtQty(i.q, i.u)}</span>
+        </label>`).join('')}`).join('')}
+      <p class="small muted" style="margin:14px 0 0"><b>Dans tes placards ?</b> ${list.placard.map(esc).join(', ')}.</p>
+    </div>
+  </div>`;
+}
+
+// Ajoute (ou retire) des protéines au compteur du jour, avec la fête quand l'objectif tombe
+function addProtein(delta) {
+  const k = todayIso();
+  const goal = foodNow().t.protein;
+  const before = S.food.protein[k] || 0;
+  const after = Math.max(0, before + delta);
+  if (after) S.food.protein[k] = after; else delete S.food.protein[k];
+  save(); render(); buzz(30);
+  if (before < goal && after >= goal) { burst('PROTÉINES !!!'); yell(); }
+  return after;
+}
+
+const md = s => esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+function openRecipe(id) {
+  const r = RECIPES.find(x => x.id === id);
+  if (!r) return;
+  const wrap = $('#sheet');
+  wrap.firstElementChild.innerHTML = `<div class="grab"></div>
+    <div class="r-hero" aria-hidden="true">${r.emoji}</div>
+    <h2>${esc(r.name)}</h2>
+    <p class="muted" style="margin:2px 0 0;font-weight:700">${r.portions} portions · ≈ ${r.time} min · ${esc(r.tag)}</p>
+    <div class="macros four t-food">
+      <div><b>${r.kcal}</b><span>kcal</span></div>
+      <div><b>${r.p} g</b><span>prot.</span></div>
+      <div><b>${r.l} g</b><span>lip.</span></div>
+      <div><b>${r.g} g</b><span>gluc.</span></div>
+    </div>
+    <p class="small muted" style="margin:-4px 0 0">Par portion, valeurs approximatives.</p>
+    <h3 class="sheet-h">INGRÉDIENTS</h3>
+    <ul class="ingr">${r.ingredients.map(i => `<li>${esc(i)}</li>`).join('')}</ul>
+    <h3 class="sheet-h">AU COOKEO</h3>
+    <ol class="steps">${r.steps.map(s => `<li><span>${md(s)}</span></li>`).join('')}</ol>
+    ${r.tip ? `<div class="hint warm">💡 ${esc(r.tip)}</div>` : ''}
+    <div class="t-food"><button class="btn big" data-act="eat" data-id="${r.id}" style="background:var(--accent)">J'EN MANGE UNE ! +${r.p} G</button></div>
+    <button class="btn block" data-act="close-sheet" style="margin-top:10px">Fermer</button>`;
+  wrap.classList.remove('hidden');
+  wrap.firstElementChild.scrollTop = 0;
 }
 
 function weigh() {
@@ -865,6 +1023,7 @@ function render() {
     case 'workout': html = viewWorkout(); break;
     case 'history': html = viewHistory(); break;
     case 'food': html = viewFood(); break;
+    case 'menu': html = viewMenu(arg); break;
     case 'settings': html = viewSettings(); break;
     case 'done': html = viewDone(arg); break;
     default: html = viewToday();
@@ -877,7 +1036,7 @@ function render() {
 
   if (route === 'food') bindChart();
 
-  const tab = { '': 'today', week: 'week', session: 'week', food: 'food', history: 'history', settings: 'settings', done: 'history' }[route];
+  const tab = { '': 'today', week: 'week', session: 'week', food: 'food', menu: 'food', history: 'history', settings: 'settings', done: 'history' }[route];
   document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === tab));
   const resume = $('#resume');
   const showResume = S.active && route !== 'workout';
@@ -963,14 +1122,23 @@ document.addEventListener('click', e => {
     }
     case 'food-setup': foodSetup(); break;
     case 'weigh': weigh(); break;
-    case 'prot': {
-      const k = todayIso();
-      const goal = foodNow().t.protein;
-      const before = S.food.protein[k] || 0;
-      const after = Math.max(0, before + +el.dataset.g);
-      if (after) S.food.protein[k] = after; else delete S.food.protein[k];
-      save(); render(); buzz(30);
-      if (before < goal && after >= goal) { burst('PROTÉINES !!!'); yell(); }
+    case 'prot': addProtein(+el.dataset.g); break;
+    case 'recipe': openRecipe(el.dataset.id); break;
+    case 'menu-swap': {
+      const w = el.dataset.w;
+      const picks = swapPick(picksFor(w), +el.dataset.i);
+      S.food.menus[w] = picks;
+      pruneWeeks(); save(); render();
+      toast(`Nouveau plat : ${RECIPE[picks[+el.dataset.i]].name}`);
+      break;
+    }
+    case 'shop-reset': delete S.food.shop[el.dataset.w]; save(); render(); break;
+    case 'eat': {
+      const r = RECIPES.find(x => x.id === el.dataset.id);
+      if (!r) break;
+      closeSheet();
+      const total = addProtein(r.p);
+      toast(`+${r.p} g de protéines (${total} g aujourd'hui). ICH !`);
       break;
     }
     case 'del-weight':
@@ -1075,6 +1243,11 @@ app.addEventListener('change', e => {
       P[f] = v;
     }
     save(); render();
+  } else if (t.dataset.shop !== undefined) {
+    const w = t.dataset.w;
+    const list = (S.food.shop[w] ||= {});
+    if (t.checked) list[t.dataset.shop] = true; else delete list[t.dataset.shop];
+    pruneWeeks(); save(); render();
   } else if (t.dataset.crea !== undefined) {
     const k = todayIso();
     if (t.checked) S.food.creatine[k] = true; else delete S.food.creatine[k];

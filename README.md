@@ -1,6 +1,6 @@
 # ICH !!! — PWA muscu Push / Pull / Legs
 
-PWA sans build (HTML + CSS + JS modules). Programme avancé PPL ×2 sur 6 jours + 1 jour off, cycle de 5 semaines (S5 = deload), séries/charges/reps, chrono de repos plein écran avec cri « ICH !!! », suggestions de progression, records (1RM estimé), historique. Onglet BOUFFE : calories et macros calculées depuis le profil, pesée du matin avec moyenne sur 7 jours et courbe, ajustement automatique des calories toutes les 2 semaines, compteur de protéines et suivi de la créatine. Tout est stocké en local sur le téléphone (`localStorage`).
+PWA sans build (HTML + CSS + JS modules). Programme avancé PPL ×2 sur 6 jours + 1 jour off, cycle de 5 semaines (S5 = deload), séries/charges/reps, chrono de repos plein écran avec cri « ICH !!! », suggestions de progression, records (1RM estimé), historique. Onglet BOUFFE : calories et macros calculées depuis le profil, pesée du matin avec moyenne sur 7 jours et courbe, ajustement automatique des calories toutes les 2 semaines, compteur de protéines, suivi de la créatine, 9 recettes Cookeo riches en protéines et un menu de la semaine (3 plats cuisinés le dimanche, 14 repas, liste de courses à cocher). Tout est stocké en local sur le téléphone (`localStorage`).
 
 **En ligne : https://elululu.github.io/ich/** (GitHub Pages, branche `main`, dépôt [elululu/ich](https://github.com/elululu/ich)).
 
@@ -28,6 +28,7 @@ Le service worker (mode hors ligne + installation) exige **HTTPS**. Déployer le
 | `js/data.js` | Exercices (consignes, phrases ICH) et les 6 séances (séries, reps, repos, RPE, tempo) |
 | `js/app.js` | Vues, séance en cours, chrono de repos, progression, écran BOUFFE |
 | `js/food.js` | Calculs d'alimentation : besoins (Mifflin-St Jeor), macros, tendance du poids, bilan auto |
+| `js/recipes.js` | Recettes Cookeo (ingrédients, étapes, macros par portion, achats) et menu de la semaine |
 | `js/store.js` | Sauvegarde locale |
 | `js/sound.js` | Cris « ICH !!! » + bips WebAudio |
 | `gif/` | 31 démos animées (une par exercice) |

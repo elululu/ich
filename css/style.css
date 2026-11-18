@@ -433,6 +433,70 @@ h2.section::after { content: ''; flex: 1; height: 3px; background: var(--ink); b
 .food-ref .log-body div { align-items: center; }
 .mini-x { width: 26px; height: 26px; margin-left: 8px; border: 2px solid var(--ink); border-radius: 8px; background: var(--paper); font-weight: 900; line-height: 1; }
 
+/* Recettes Cookeo */
+.recipe-list { display: grid; gap: 12px; }
+.recipe-card {
+  display: grid; grid-template-columns: 40px 1fr auto; gap: 10px; align-items: center; width: 100%;
+  padding: 10px 12px; text-align: left; transition: transform .06s, box-shadow .06s;
+}
+.recipe-card:active { transform: translate(3px, 3px); box-shadow: 0 0 0 var(--ink); }
+.r-emoji { font-size: 30px; line-height: 1; text-align: center; }
+.r-main { min-width: 0; }
+.r-main b { display: block; font-weight: 900; font-size: 15px; line-height: 1.2; }
+.r-main small { display: block; margin-top: 2px; font-size: 12px; font-weight: 700; color: var(--muted); }
+.r-macro { display: grid; grid-template-columns: auto auto; column-gap: 4px; align-items: baseline; text-align: right; }
+.r-macro b { font-family: 'Bangers', sans-serif; font-weight: 400; font-size: 19px; letter-spacing: .5px; line-height: 1.05; }
+.r-macro small { font-size: 10.5px; font-weight: 800; color: var(--muted); text-align: left; }
+.r-hero { font-size: 64px; line-height: 1; text-align: center; margin: 4px 0 8px; }
+.macros.four { grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.macros.four b { font-size: 22px; }
+.sheet-h { font-size: 24px; margin: 18px 0 8px; }
+.ingr { margin: 0; padding-left: 20px; display: grid; gap: 5px; font-weight: 600; font-size: 14.5px; }
+.steps { margin: 0 0 12px; padding: 0; list-style: none; display: grid; gap: 10px; counter-reset: step; }
+.steps li { display: grid; grid-template-columns: 28px 1fr; gap: 10px; font-weight: 600; font-size: 14.5px; line-height: 1.4; counter-increment: step; }
+.steps li::before {
+  content: counter(step); display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
+  background: #E86A00; color: #fff; border: 2px solid var(--ink); font-family: 'Bangers', sans-serif; font-size: 16px;
+}
+.steps b { font-weight: 900; }
+
+/* Menu de la semaine */
+.menu-cta { text-decoration: none; color: inherit; }
+.menu-cta .chev, .recipe-card .chev { font-family: 'Bangers', sans-serif; font-size: 26px; line-height: 1; }
+.pick .r-main { background: none; border: 0; padding: 0; text-align: left; cursor: pointer; }
+.pick .btn.sm { font-size: 18px; padding: 6px 12px; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.seg a {
+  text-align: center; text-decoration: none; color: var(--ink); font-weight: 800; font-size: 14px;
+  background: var(--paper); border: 2px solid var(--ink); border-radius: 12px; padding: 8px 6px; box-shadow: 2px 2px 0 var(--ink);
+}
+.seg a.on { background: var(--ink); color: var(--yellow); }
+.days { padding: 6px 12px; }
+.day-row { display: grid; grid-template-columns: 44px 1fr 1fr; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 2px dashed rgba(20, 18, 16, .15); }
+.day-row:last-child { border-bottom: 0; }
+.day-row.head { padding: 4px 0 2px; border-bottom: 0; font-size: 11px; font-weight: 900; letter-spacing: 1px; color: var(--muted); }
+.day-row .dn { font-family: 'Bangers', sans-serif; font-size: 19px; line-height: 1; letter-spacing: .5px; }
+.day-row .dn small { display: block; margin-top: 2px; font-family: 'Archivo', sans-serif; font-size: 10.5px; font-weight: 700; letter-spacing: 0; color: var(--muted); }
+.day-row.today .dn { color: var(--accent); -webkit-text-stroke: .5px var(--ink); }
+.day-row.today { background: var(--paper-2); margin: 0 -12px; padding-left: 12px; padding-right: 12px; }
+.meal {
+  display: flex; align-items: center; gap: 5px; min-width: 0; padding: 6px 7px; text-align: left;
+  border: 2px solid var(--ink); border-radius: 10px; background: #fff; box-shadow: 2px 2px 0 var(--ink);
+  font-weight: 800; font-size: 12.5px; line-height: 1.15;
+}
+.meal:active { transform: translate(2px, 2px); box-shadow: none; }
+.meal span:nth-child(2) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meal i { font-style: normal; font-size: 11px; }
+.meal.frozen { background: #E6F1FF; }
+.shop h3 { font-size: 19px; margin: 16px 0 4px; }
+.shop-item {
+  display: grid; grid-template-columns: 24px 1fr auto; gap: 10px; align-items: center; padding: 8px 0;
+  border-bottom: 2px dashed rgba(20, 18, 16, .12); font-weight: 700; font-size: 14.5px; cursor: pointer;
+}
+.shop-item input { width: 22px; height: 22px; margin: 0; accent-color: #E86A00; }
+.shop-item .q { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.shop-item.done span { color: var(--muted); text-decoration: line-through; }
+
 /* ───────── Barre d'onglets ───────── */
 .tabs {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--ink);
